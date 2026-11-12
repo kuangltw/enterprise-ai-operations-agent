@@ -56,7 +56,7 @@
 
 新增成員請求為 `{"email":"new@example.invalid","password":"<password>","role":"staff"}`，回應包含新 User 的 `id`、`tenant_id`、正規化後的 `email` 與 `role`，不回傳密碼或雜湊。端點在同筆交易建立 User 與 Membership，鎖定呼叫者在該租戶的 admin Membership。無成員資格或租戶停用回 404，非 admin 回 403，Email 已存在回 409；不得藉此建立其他租戶的成員或新的 admin。
 
-角色變更請求為 `{"role":"manager"}`，僅允許 manager、staff 或 viewer。撤銷只刪除指定租戶的 Membership，User 在其他租戶的成員資格不受影響；已撤銷者下一次租戶查詢立即看不到該租戶。不可修改 admin Membership。全域 User 停權與新租戶建立仍待設計與實作。
+角色變更請求為 `{"role":"manager"}`，僅允許 manager、staff 或 viewer。撤銷只刪除指定租戶的 Membership，User 在其他租戶的成員資格不受影響；已撤銷者下一次租戶查詢立即看不到該租戶。不可修改 admin Membership。全域 User 停權及新租戶建立限資料庫操作員透過本機受控指令執行；未提供可由 JWT 呼叫的全域管理 API。
 
 ## 2. SOP Knowledge（知識庫）API
 
