@@ -10,12 +10,19 @@
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
 | M1-05 CI 與整合驗收 | Accepted with Known Issues（有條件驗收通過） | `66aabc9` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本次隔離 E2E 4 passed；單次登出 500 留存[獨立追蹤](issues/LOGOUT-500.md) |
-| M2 RAG | 文件資料庫、ACL 保護的單筆／列表讀取及 MinIO 儲存元件已實作並測試 | `0006_documents`、`GET /documents`、`GET /documents/{id}`、隔離 MinIO 寫入／讀回；上傳 API、解析、索引、問答仍未實作 |
+| M2 RAG | 文件資料庫、ACL 保護的單筆／列表讀取及 MinIO 儲存元件已實作並測試 | `0006_documents`、`0007_document_upload_state`、`GET /documents`、`GET /documents/{id}`、隔離 MinIO 寫入／讀回；上傳 API、解析、索引、問答仍未實作 |
 
 ## 下一個任務
 
-1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為文件上傳 API：確認建立文件、MinIO 寫入、資料庫交易與失敗補償的順序，並補 Contract／Integration Test。
+1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為受控文件上傳流程：先確定預留物件鍵、資料庫交易、MinIO 寫入、重試對帳及失敗補償，再補 API、Contract／Integration Test；完成前不開放上傳端點。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2 文件上傳狀態前置工作
+
+- 新增 `0007_document_upload_state`：文件版本預設 `pending_upload`，可轉為 `stored` 或 `failed`；可選 UUID 冪等鍵在同租戶內唯一。既有版本保守地標為 `pending_upload`，不得推定 MinIO 物件已存在。此項只建立資料庫約束，尚無對外上傳 API 或自動補償流程。
+- 在一次性 tmpfs PostgreSQL 從空白套用 Alembic 至 `0007_document_upload_state` 成功；安裝隔離容器的測試相依套件後，執行上傳狀態、既有文件跨租戶約束及 ACL 讀取整合測試，結果 **4 passed、1 個既有棄用警告**。第一次測試容器缺少 `pytest` 而未能執行，已修正測試環境；容器用 `docker compose down` 清理，沒有刪除 Volume。
+- 後續上傳流程須明確預留物件鍵，對 MinIO 不確定結果先查詢物件，再更新儲存狀態；冪等鍵重用時需核對請求內容，不能僅依唯一約束回傳成功。發布版本仍須驗證儲存與索引就緒，目前資料庫尚未強制此條件。本輪未新增登出 500 重現策略，狀態仍為未重現／保留追蹤。
+- 本項在本機 `main` 的 `a836ce6` 後進行，未 Push；提交 SHA 以 Git 紀錄為準。
 
 ## 2026-11-13 M2 文件列表與有界歷史問題處置
 

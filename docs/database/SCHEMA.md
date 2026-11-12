@@ -1,6 +1,6 @@
 # PostgreSQL 資料庫 Schema（結構）規格 v0.1
 
-> **整體仍為設計規格。** M1 的 `tenants`、`users`、`memberships`、`sessions` 與 Demo ERP 基礎資料表已有 Migration；M2 首項新增 `documents`、`document_versions`、`document_acl` 的 `0006_documents` Migration。其餘資料表仍未實作。詳見 [M1-01 驗證紀錄](../development/M1-01-VERIFICATION.md) 與 [開發進度](../development/PROGRESS.md)。建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
+> **整體仍為設計規格。** M1 的 `tenants`、`users`、`memberships`、`sessions` 與 Demo ERP 基礎資料表已有 Migration；M2 已有 `0006_documents` 文件基礎表及 `0007_document_upload_state` 儲存狀態 Migration。其餘資料表仍未實作。詳見 [M1-01 驗證紀錄](../development/M1-01-VERIFICATION.md) 與 [開發進度](../development/PROGRESS.md)。建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
 
 ## 1. 資料庫邊界
 
@@ -99,7 +99,7 @@ ALTER TABLE membership_warehouse_scopes ADD CONSTRAINT fk_scope_tenant_warehouse
 
 ## 4. Knowledge（文件與索引）
 
-`0006_documents` 已建立下列 `documents`、`document_versions`、`document_acl` 資料表，並以複合外鍵限制版本、ACL 與已選 `current_version` 必須屬於同一租戶及同一文件。`document_chunks` 仍為規劃中。下列 DDL 為設計摘要；實際約束以 Migration 為準。
+`0006_documents` 已建立下列 `documents`、`document_versions`、`document_acl` 資料表，並以複合外鍵限制版本、ACL 與已選 `current_version` 必須屬於同一租戶及同一文件。`0007_document_upload_state` 新增儲存狀態及租戶內唯一的可選冪等鍵。`document_chunks` 仍為規劃中。下列 DDL 為設計摘要；實際約束以 Migration 為準。
 
 ```sql
 CREATE TABLE documents (
@@ -131,11 +131,15 @@ CREATE TABLE document_versions (
   version integer NOT NULL CHECK (version > 0),
   storage_key text NOT NULL,
   sha256 char(64) NOT NULL,
+  storage_status varchar(20) NOT NULL DEFAULT 'pending_upload'
+    CHECK (storage_status IN ('pending_upload','stored','failed')),
+  idempotency_key uuid,
   indexing_status varchar(20) NOT NULL DEFAULT 'pending'
     CHECK (indexing_status IN ('pending','processing','ready','failed')),
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id,id),
   UNIQUE (tenant_id,document_id,version),
+  UNIQUE (tenant_id,idempotency_key),
   FOREIGN KEY (tenant_id,document_id)
     REFERENCES documents(tenant_id,id)
 );
@@ -158,7 +162,7 @@ CREATE TABLE document_chunks (
 
 必要不變條件：發佈的 `current_version` 必須存在、索引為 `ready`；Owner（擁有者）必須是同 Tenant 的成員；重複 SHA256 應以交易鎖及明確版本政策處理。Qdrant Payload（負載欄位）應帶 `tenant_id`、`document_id`、`version_id`、`chunk_id`、`allowed_roles`。檢索後仍需由 PostgreSQL 重新檢查 ACL。
 
-目前資料庫只保證 `current_version` 指向現有且同租戶的版本；**`ready` 後發布、Owner 成員資格、同 SHA256 去重與檢索時 ACL 重驗尚未實作**。現行單一文件 Metadata 讀取已有 Tenant Membership 與 ACL 檢查；在對應 API／交易測試完成前，不可開放原文上傳、原文讀取或知識檢索。
+目前資料庫只保證 `current_version` 指向現有且同租戶的版本、儲存狀態值有效，以及同租戶非空冪等鍵不重複。既有版本在 Migration 後保守標為 `pending_upload`，不能據此判定物件已存在；後續上傳流程須先對帳 MinIO 才可標為 `stored`。**`ready` 後發布、Owner 成員資格、同 SHA256 去重與檢索時 ACL 重驗尚未實作**。現行單一文件 Metadata 讀取已有 Tenant Membership 與 ACL 檢查；在對應 API／交易測試完成前，不可開放原文上傳、原文讀取或知識檢索。
 
 ## 5. Agent 執行歷程
 
