@@ -6,7 +6,7 @@
 |---|---|---|
 | M1-01 環境驗證 | 本機已完成 | [驗證紀錄](M1-01-VERIFICATION.md) |
 | 本機 Git 機密防護 | 本機已完成 | 2026-11-12 隔離 Repository 提交測試 6 項通過；安全修正 `141ffae9f35f91ecde0e16060ac10d9447d186f0` |
-| M1-02 身分驗證與租戶管理 | 進行中 | 登入、Session 撤銷及 Redis 速率限制已實作；受控建帳與租戶 API 尚未實作 |
+| M1-02 身分驗證與租戶管理 | 進行中 | 首次建帳、登入、Session 撤銷及速率限制已實作；租戶 API 尚未實作 |
 | M1-03 RBAC 與租戶隔離 | 待開始 | 尚未實作 |
 | M1-04 React 登入與管理介面 | 待開始 | 尚未實作 |
 | M1-05 CI 與整合驗收 | 待開始 | 尚未實作 |
@@ -39,6 +39,9 @@
 - 第五項工作：登入前以 Redis Lua Script 原子計數，限制來源 IP 每 60 秒 10 次、帳號每 300 秒 5 次；帳號以 HMAC 鍵識別，不儲存 Email 原文。Redis 失效時登入回 503。提交 `14616966181080857b265353a0cfa7f3cd9057bc`。
 - 測試與安全：Compose API 與實際 PostgreSQL、Redis 的完整測試 21 passed、6 個棄用警告；Redis 整合案例驗證第 6 次遭拒及兩類 Key 的 TTL。`docker compose config --quiet` 通過；`pip-audit -r requirements-dev.txt` 未發現已知漏洞；`git diff --cached --check` 通過，Gitleaks 掃描 11 個暫存檔未發現機密。
 - 官方額度：第五項完成後 5 小時剩餘 47%、每週剩餘 91%。下一項為受控建立使用者與租戶。
+- 第六項工作：新增只限空白資料庫的互動式首次建帳指令，在單筆交易建立 User、Tenant 與 admin Membership；密碼由隱藏輸入讀取，已有資料時拒絕重做。提交 `9a730b56ea8e19cf042193bf005fb8e93eff97fb`。
+- 測試與安全：實際 PostgreSQL 首次建帳、防重複及交易回滾案例在完整 API 測試中通過，總計 25 passed、6 個既有棄用警告；`git diff --cached --check` 通過，Gitleaks 掃描 5 個暫存檔未發現機密。未執行真實管理員建帳，避免佔用或污染本機開發資料庫。
+- 官方額度：第六項完成後 5 小時剩餘 43%、每週剩餘 91%。下一項為租戶列表與成員資格查詢 API。
 
 ## 2026-11-12 本機 Git 機密防護驗證
 
