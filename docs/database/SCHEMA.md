@@ -51,6 +51,8 @@ CREATE TABLE users (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE UNIQUE INDEX ux_users_email_lower ON users (lower(email));
+
 CREATE TABLE memberships (
   tenant_id uuid NOT NULL REFERENCES tenants(id),
   user_id uuid NOT NULL REFERENCES users(id),
@@ -72,7 +74,7 @@ CREATE TABLE sessions (
 CREATE INDEX ix_sessions_user_expires ON sessions(user_id, expires_at);
 ```
 
-`sessions.id` 將作為 JWT 的 `jti`，每次受保護請求須檢查工作階段未撤銷且未過期。Email 正規化、停權與權限變更稽核仍待實作。
+`sessions.id` 作為 JWT 的 `jti`，每次受保護請求須檢查工作階段未撤銷且未過期。建帳時 Email 轉為小寫並去除前後空白，資料庫另以 `ux_users_email_lower` 阻止大小寫重複；停權與權限變更稽核仍待實作。
 
 ## 4. Knowledge（文件與索引）
 
