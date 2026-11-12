@@ -22,6 +22,9 @@
 - M1-05 第三項：受保護 API 於 OpenAPI 宣告 HTTP Bearer Security Scheme，並以 Contract Test 檢查登入端點公開、受保護端點需 Bearer；另驗證錯誤格式的憑證仍回 401。同步 API 契約文件。提交 `46a62bd`（`test: 補齊 Bearer 驗證的 OpenAPI 契約`）。
 - 驗證：重建 API 映像，使用 Compose PostgreSQL／Redis 與兩種整合測試旗標執行 `python -m pytest -p no:cacheprovider -q`，39 passed、1 skipped（既有資料庫不適用空白初始化案例）、6 個既有棄用警告。`git diff --cached --check` 通過；Gitleaks 掃描 3 個暫存檔未發現機密，Hook 提交前再掃描通過。未新增依賴。提交後官方額度為 5 小時剩餘 90%、每週剩餘 69%。
 - 下一項：M1-05 依賴安全稽核與本機 Compose 完整驗收；遠端 CI 須 Push 後才能執行，但本循環禁止自動 Push。
+- M1-05 第四項：新增 `apps/web/package-lock.json`，Docker 與 GitHub Actions 前端建置改用 `npm ci`；CI 加入 `npm audit --audit-level=high`。提交 `0fce7fd`（`ci: 鎖定前端相依版本並執行漏洞稽核`）。
+- 驗證：本機 `npm audit --prefix apps/web --audit-level=high` 回報 0 個漏洞；`docker compose build web` 中 `npm ci`、TypeScript、Vite 均成功；`docker compose config --quiet` 通過。`git diff --cached --check` 與 Gitleaks 暫存區 3 個檔案掃描均通過，提交 Hook 再掃描通過。嘗試 Python `pip_audit` 時本機尚未安裝該工具，待下項補做；新增的前端間接依賴已納入 npm audit。提交後官方額度為 5 小時剩餘 85%、每週剩餘 68%。
+- 下一項：執行 Python 依賴稽核、Compose Migration 與完整回歸；M1-04 瀏覽器互動及遠端 GitHub Actions 仍待可用工具或人工 Push。
 
 - 官方 Codex 額度恢復後續作：開始時 5 小時剩餘 100%、每週剩餘 84%；工作區 Git 狀態乾淨。一次性 Thread Automation `m1` 已在喚醒後刪除，避免重複執行。
 - 第十二項工作：新增 `apps/api/src/create_tenant.py` 及 PostgreSQL 整合測試；資料庫操作員可指定既有啟用 User 作為新租戶首位 admin，租戶與 Membership 在同筆交易寫入。同步 API 契約及啟動文件。未提供租戶 admin 可呼叫的全域建立租戶 API，避免任意擴張租戶。
