@@ -54,3 +54,5 @@ jobs:
         run: |
           cp .env.example .env
           docker compose config --quiet
+      - name: 驗證 MinIO 映像可取得
+        run: docker compose pull minio
