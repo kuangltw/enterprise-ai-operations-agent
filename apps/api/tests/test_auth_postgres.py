@@ -12,6 +12,7 @@ from src.auth import get_db
 from src.db import engine
 from src.main import app
 from src.passwords import hash_password
+from src.rate_limit import get_login_limiter
 from src.settings import settings
 
 pytestmark = pytest.mark.skipif(
@@ -35,6 +36,9 @@ def test_login_and_revocation_against_postgres(monkeypatch):
                     yield db
 
             app.dependency_overrides[get_db] = override_db
+            app.dependency_overrides[get_login_limiter] = lambda: type(
+                "SyntheticLimiter", (), {"allow": lambda self, *_: True},
+            )()
             monkeypatch.setattr(settings, "jwt_signing_key", "synthetic-test-only-" * 3)
             client = TestClient(app)
             response = client.post("/api/v1/auth/login", json={

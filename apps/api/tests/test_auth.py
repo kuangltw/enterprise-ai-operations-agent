@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 from src.auth import get_db
 from src.main import app
 from src.passwords import hash_password
+from src.rate_limit import get_login_limiter
 from src.settings import settings
 
 
@@ -32,6 +33,9 @@ def auth_client(monkeypatch):
             yield db
 
     app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_login_limiter] = lambda: type(
+        "SyntheticLimiter", (), {"allow": lambda self, *_: True},
+    )()
     monkeypatch.setattr(settings, "jwt_signing_key", "synthetic-test-only-" * 3)
     try:
         yield TestClient(app), engine
@@ -86,3 +90,25 @@ def test_openapi_contains_auth_contract():
     assert "post" in paths["/api/v1/auth/login"]
     assert "get" in paths["/api/v1/auth/me"]
     assert "post" in paths["/api/v1/auth/logout"]
+
+
+def test_login_limit_and_redis_outage_fail_closed(auth_client):
+    client, _ = auth_client
+    body = {"email": "test@example.invalid", "password": "synthetic-password-123"}
+
+    class BlockedLimiter:
+        def allow(self, *_):
+            return False
+
+    app.dependency_overrides[get_login_limiter] = lambda: BlockedLimiter()
+    response = client.post("/api/v1/auth/login", json=body)
+    assert response.status_code == 429
+    assert response.json()["error"]["code"] == "LOGIN_RATE_LIMITED"
+
+    class BrokenLimiter:
+        def allow(self, *_):
+            from redis.exceptions import ConnectionError
+            raise ConnectionError("synthetic outage")
+
+    app.dependency_overrides[get_login_limiter] = lambda: BrokenLimiter()
+    assert client.post("/api/v1/auth/login", json=body).status_code == 503

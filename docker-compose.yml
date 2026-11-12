@@ -83,6 +83,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${AGENT_DB_USER}:${AGENT_DB_PASSWORD}@agent-db:5432/${AGENT_DB_NAME}
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-}
+      REDIS_URL: redis://redis:6379/0
       ERP_BASE_URL: http://demo-erp:8080
     ports:
       - "127.0.0.1:8000:8000"
@@ -90,6 +91,8 @@ services:
       agent-migrate:
         condition: service_completed_successfully
       demo-erp:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready',timeout=2)"]

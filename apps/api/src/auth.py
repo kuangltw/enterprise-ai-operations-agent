@@ -5,13 +5,15 @@ from datetime import datetime, timezone
 from typing import Iterator
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from redis.exceptions import RedisError
 
 from .db import engine
 from .passwords import hash_password, verify_password
+from .rate_limit import LoginRateLimiter, get_login_limiter
 from .settings import settings
 from .tokens import issue_access_token, verify_access_token
 
@@ -86,9 +88,17 @@ def get_current_user(
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, db: Session = Depends(get_db),
-          signing_key: str = Depends(get_signing_key)) -> TokenResponse:
+def login(body: LoginRequest, request: Request, db: Session = Depends(get_db),
+          signing_key: str = Depends(get_signing_key),
+          limiter: LoginRateLimiter = Depends(get_login_limiter)) -> TokenResponse:
     email = body.email.strip().lower()
+    address = request.client.host if request.client else "unknown"
+    try:
+        allowed = limiter.allow(address, email, signing_key)
+    except RedisError as exc:
+        raise AuthError(503, "AUTH_UNAVAILABLE", "身分驗證服務尚未就緒") from exc
+    if not allowed:
+        raise AuthError(429, "LOGIN_RATE_LIMITED", "登入嘗試過於頻繁")
     if not email or " " in email or "@" not in email:
         raise AuthError(401, "INVALID_CREDENTIALS", "帳號或密碼錯誤")
     rows = db.execute(text("""

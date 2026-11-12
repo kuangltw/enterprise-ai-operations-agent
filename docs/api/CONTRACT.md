@@ -38,6 +38,8 @@
 
 登入請求：`{"email":"user@example.invalid","password":"<password>"}`。成功回應包含 `access_token`、`token_type`（`Bearer`）及 UTC `expires_at`。JWT 的 `sub` 為 User ID、`jti` 為 Session ID；每次存取受保護端點必須重新檢查資料庫狀態。登入與身分驗證錯誤回傳上述 `error` 格式；422 請求結構錯誤仍使用 FastAPI 預設格式，待 M1-05 統一。尚未提供 Refresh Token（更新憑證）、公開註冊或租戶選擇 API。
 
+登入嘗試以 Redis 對來源 IP 設定每 60 秒 10 次、對帳號設每 300 秒 5 次限制，超過回傳 429；Redis 無法使用時回傳 503。帳號識別以 HMAC 處理，不將 Email 原文寫入 Redis Key。伺服器只使用連線來源位址，不採信未受控的代理轉送 Header。
+
 ## 2. SOP Knowledge（知識庫）API
 
 | Method | Endpoint | 功能 | 權限 |
