@@ -1,4 +1,4 @@
-"""M1 API 骨架：僅提供健康檢查，未開放受保護的業務端點。"""
+"""FastAPI 入口：身分、租戶與受 ACL 保護的文件中繼資料。"""
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -8,11 +8,13 @@ from uuid import UUID, uuid4
 
 from .db import engine
 from .auth import AuthError, router as auth_router
+from .documents import router as document_router
 from .tenants import router as tenant_router
 
 app = FastAPI(title="Enterprise AI Operations Agent API", version="0.1.0")
 app.include_router(auth_router)
 app.include_router(tenant_router)
+app.include_router(document_router)
 
 
 @app.exception_handler(AuthError)

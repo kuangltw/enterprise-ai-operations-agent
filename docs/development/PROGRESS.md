@@ -10,12 +10,19 @@
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
 | M1-05 CI 與整合驗收 | Accepted with Known Issues（有條件驗收通過） | `66aabc9` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本次隔離 E2E 4 passed；單次登出 500 留存[獨立追蹤](issues/LOGOUT-500.md) |
-| M2 RAG | 首項文件資料庫基礎已實作並測試 | `0006_documents` 與跨租戶約束測試；上傳、MinIO、解析、索引、問答仍未實作 |
+| M2 RAG | 文件資料庫基礎及單一文件中繼資料讀取已實作並測試 | `0006_documents`、跨租戶約束與 ACL 保護的 `GET /documents/{id}`；上傳、MinIO、解析、索引、問答仍未實作 |
 
 ## 下一個任務
 
-1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。依既有規格執行 M2 最小工作。
+1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為受控文件上傳與 MinIO 原始文件儲存的最小切分；先決定上傳限制與失敗補償，再實作。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2 文件讀取 API
+
+- 起始本機 `main` 乾淨，領先遠端三筆；GitHub `main` 仍為 `66aabc9`，未 Push。官方額度開始時 5 小時與每週視窗均剩餘 100%。
+- 新增僅回傳中繼資料的 `GET /api/v1/documents/{document_id}`。JWT 與 `X-Tenant-ID` 必填；`get_tenant_context` 重驗有效成員資格，SQL 再以租戶、文件、目前角色的 ACL 及未刪除狀態篩選。無權限與不存在均回 404，不回傳原始文件或索引內容。
+- 更新 API 契約與 OpenAPI 契約測試，新增 PostgreSQL 整合測試。先執行新契約測試，因端點尚未實作而如預期失敗；實作後在新建 tmpfs PostgreSQL 從空白套用 Alembic 至 `0006_documents`，執行文件 API、文件跨租戶約束、身分驗證 PostgreSQL 與 SQLite 測試，結果 **11 passed、8 warnings**。測試容器已清理。
+- 文件上傳、版本發布、MinIO 寫入、解析、索引、檢索與問答仍未實作。資料庫目前不能保證已選版本處於 `ready`，也尚未限制 Owner 必須是同租戶成員；對外只開放 ACL 保護的 Metadata 讀取。
 
 ## 2026-11-13 M1 驗收決策與 M2 工作清單
 

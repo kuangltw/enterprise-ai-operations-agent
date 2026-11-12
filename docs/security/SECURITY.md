@@ -1,6 +1,6 @@
 # Security Model（安全模型）v0.1
 
-> **安全設計基準，尚未通過完整安全稽核。** M1-02 已建立密碼雜湊、JWT、Session 撤銷、Redis 登入速率限制及受控全域 User 停權；M1-03 的租戶隔離、RBAC 與倉庫範圍已有本機測試，M1-04 登入流程已有合成資料的 Playwright E2E。M1 遠端 CI 在 `6af29ac` 已通過；單次登出 500 的原因、ERP 實際執行點授權及完整安全驗收仍待確認。
+> **安全設計基準，尚未通過完整安全稽核。** M1 已[有條件驗收通過](../testing/ACCEPTANCE.md)，歷史登出 500 的根因仍未確認。M2 已實作文件中繼資料讀取時的 Tenant Membership 與 ACL 檢查；文件上傳、檢索與 ERP 實際執行點授權仍待實作及驗收。
 
 ## 1. Trust Boundary（信任邊界）
 
