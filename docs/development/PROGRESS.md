@@ -40,6 +40,8 @@
 - M1-03 第五項：新增 `0005_tenant_warehouses` Migration，以全域唯一倉庫代碼登錄租戶，並以複合外鍵限制 Membership 倉庫 Scope 只能指向同租戶倉庫。PostgreSQL 測試涵蓋無 Membership 與錯租戶代碼拒絕。提交 `a075fc9`（`feat: 約束倉庫代碼的租戶歸屬`）。
 - 驗證：Migration 套用與重跑成功；API 映像重建後完整測試 37 passed、1 skipped、6 個既有棄用警告；`git diff --cached --check` 通過，Gitleaks 掃描 3 個暫存檔未發現機密。未新增依賴，未執行破壞性 downgrade。
 - 風險與下一項：若既有環境已有未登錄的 Scope 資料列，此 Migration 會安全失敗，須由操作員先核實歸屬；目前本機套用成功。仍需受控登錄倉庫與分配 Scope 的流程，且 ERP 實際倉庫歸屬需在後續整合驗證。提交後官方額度為 5 小時剩餘 60%、每週剩餘 78%。
+- M1-03 第六項：新增資料庫操作員互動式倉庫登錄指令，要求先在 ERP 核實代碼與租戶歸屬，再明確確認。停用租戶、無效代碼及跨租戶重複代碼均拒絕；沒有讓一般租戶 admin 自行認領任意倉庫。提交 `f8da34c`（`feat: 新增受控倉庫代碼登錄指令`）。
+- 測試：Docker API 映像重建後完整測試 38 passed、1 skipped、6 個既有棄用警告；合成登錄資料回滾。`git diff --cached --check` 通過，Gitleaks 掃描 3 個檔案未發現機密，無新增依賴。未對真實 ERP 倉庫執行登錄。提交後官方額度為 5 小時剩餘 55%、每週剩餘 77%。下一項為 admin 分配成員倉庫 Scope 的 API。
 
 ## 2026-11-12 M1-02 自主開發循環
 
