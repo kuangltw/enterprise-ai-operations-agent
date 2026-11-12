@@ -20,6 +20,7 @@ Playwright 關閉 Trace（追蹤）、Screenshot（截圖）與 Video（錄影�
 - API 跨租戶端點回 404；登出後使用同一 JWT 查詢 `/auth/me` 回 401。
 - 首次執行因 seed 腳本找不到 `src` 模組而失敗；為隔離 API 容器設定 `PYTHONPATH=/app` 後重跑通過，未放寬測試或授權條件。
 - 改用 CI 相同的 `npm run test:e2e` 入口後，曾有一次 API 跨租戶案例的登出請求回 500；之後兩次完整重跑皆為 4 passed，原因尚未確定。執行器在未來失敗時只回報 API 例外類型，不輸出測試憑證；此間歇性失敗仍列為驗收風險，不視為已修復。
+- 針對該案例再以 `python scripts/testing/run_m1_e2e.py --grep=API --repeat-each=4` 在同一個隔離環境重複執行 4 次，結果 4 passed。執行器允許將命令列參數轉交 Playwright，供後續在隔離環境重現；目前仍無法確認先前 500 的原因。
 
 ## 尚未完成
 

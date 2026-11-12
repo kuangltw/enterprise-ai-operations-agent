@@ -76,7 +76,10 @@ def main() -> int:
         test_env.update({name: env[name] for name in seed_vars})
         test_env["E2E_BASE_URL"] = f"http://127.0.0.1:{env['E2E_WEB_PORT']}"
         test_env.pop("NO_COLOR", None)
-        result = subprocess.run([npm, "run", "test:e2e"], cwd=WEB,
+        test_command = [npm, "run", "test:e2e"]
+        if len(sys.argv) > 1:
+            test_command.extend(["--", *sys.argv[1:]])
+        result = subprocess.run(test_command, cwd=WEB,
                                 env=test_env, check=False)
         if result.returncode:
             logs = subprocess.run(common + ["logs", "--no-color", "api"], cwd=ROOT,
