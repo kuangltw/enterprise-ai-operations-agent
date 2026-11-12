@@ -6,7 +6,7 @@
 |---|---|---|
 | M1-01 環境驗證 | 本機已完成 | [驗證紀錄](M1-01-VERIFICATION.md) |
 | 本機 Git 機密防護 | 本機已完成 | 2026-11-12 隔離 Repository 提交測試 6 項通過；安全修正 `141ffae9f35f91ecde0e16060ac10d9447d186f0` |
-| M1-02 身分驗證與租戶管理 | 進行中 | 密碼雜湊、Session 資料表及 JWT 元件已實作；登入、撤銷與租戶 API 尚未實作 |
+| M1-02 身分驗證與租戶管理 | 進行中 | 登入、目前使用者與 Session 撤銷已實作；受控建帳、租戶 API、登入速率限制尚未實作 |
 | M1-03 RBAC 與租戶隔離 | 待開始 | 尚未實作 |
 | M1-04 React 登入與管理介面 | 待開始 | 尚未實作 |
 | M1-05 CI 與整合驗收 | 待開始 | 尚未實作 |
@@ -32,6 +32,10 @@
 - 第三項工作：新增固定 HS256 的短效 JWT 簽發及驗證元件；必要宣告包含 `sub`、`jti`、`iss`、`aud`、`iat`、`exp`，不信任 Token 自述的 Tenant 或 Role。提交 `6767d0a3fbd72d12d41360683cee71ef428e872c`。
 - 測試與稽核：Docker API 測試 10 passed、1 個既有棄用警告；`pip-audit -r requirements-dev.txt` 未發現已知漏洞；`git diff --cached --check` 通過，Gitleaks 掃描 4 個暫存檔未發現機密。PyJWT 固定為 2.15.1。
 - 官方額度：第三項完成後 5 小時剩餘 60%、每週剩餘 93%。下一項為將 JWT、Session 與使用者狀態接入登入 API。
+- 第四項工作：新增 `/api/v1/auth/login`、`/me`、`/logout`，每次受保護請求查詢 User 與 Session 狀態，登出寫入撤銷時間；未設有效 JWT 金鑰時登入拒絕服務。同步 Compose、`.env.example`、API 契約及開發文件。提交 `7c85cfa2bcf8f06db37fe286b4f240c6c9cec8fe`。
+- 測試：`docker compose config --quiet` 與 `docker compose build api` 成功；Docker Compose 連接實際 PostgreSQL 的完整 API 測試為 16 passed、6 個棄用警告。PostgreSQL 整合測試以外層交易回滾合成資料；OpenAPI 路徑契約測試通過。
+- 安全審查：`git diff --cached --check` 通過，Gitleaks 掃描 10 個暫存檔未發現機密。登入尚無 Rate Limit（速率限制），目前 Compose API 僅綁本機 `127.0.0.1`；後續須在擴大暴露前補上限制。尚無受控建帳與租戶 API，M1-02 未完成。
+- 官方額度：第四項完成後 5 小時剩餘 54%、每週剩餘 92%。下一項先補登入速率限制。
 
 ## 2026-11-12 本機 Git 機密防護驗證
 
