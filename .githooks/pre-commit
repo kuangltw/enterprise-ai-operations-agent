@@ -1,0 +1,11 @@
+#!/bin/sh
+# M1 開發環境：提交前必須掃描 Git 暫存區，不可略過。
+set -eu
+if command -v python3 >/dev/null 2>&1; then
+  python3 scripts/security/check_staged_secrets.py
+elif command -v python >/dev/null 2>&1; then
+  python scripts/security/check_staged_secrets.py
+else
+  echo "安全檢查拒絕提交：找不到 Python。" >&2
+  exit 1
+fi
