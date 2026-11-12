@@ -1,17 +1,21 @@
-# ADR 0004: Guard Purchase Writes with Approval + Outbox + Idempotency
+# ADR 0004：採購寫入必須經核准、Outbox 與冪等驗證
 
-- Date: 2026-11-12
-- Status: Proposed
+- 日期：2026-11-12
+- 狀態：Proposed（提案）
 
-## Context
-LLM-driven procurement can cause costly, unauthorized or duplicate ERP transactions.
+## 背景
 
-## Decision
-Only deterministic backend services create frozen drafts and request approval. A current authorized approval and source revalidation are required before a queued ERP write. Approval and outbox event commit atomically; ERP endpoint enforces stable idempotency keys. Ambiguous results are reconciled before retry.
+由 LLM 驅動的採購操作存在越權、資料過期與重複建立單據的風險。
 
-## Alternatives
-- Direct model tool write: unacceptable authorization and consistency risk.
-- Synchronous API write in approval request: risks timeout/duplicate confusion, tightly couples ERP availability to approval UX.
+## 決策
 
-## Consequences
-Requires more states, reconciliation tooling and test coverage; provides strong auditability and safe at-least-once message dispatch.
+只有確定性的 Backend Service（後端服務）可以產生採購草稿與建立審核。核准生效後，必須再次驗證權限、庫存、價格及草稿版本；核准交易與 Outbox Event（事件）同時提交。背景 Worker 透過 **C# ASP.NET Core Demo ERP API** 寫入，使用固定 Idempotency Key（冪等鍵）。結果不明時先查詢 ERP 對帳端點。
+
+## 替代方案
+
+- LLM 直接呼叫 ERP Write Tool：授權與交易風險不可接受。
+- 核准 API 同步寫入 ERP：容易受 Timeout（逾時）與 ERP 可用性影響，難以處理不明結果。
+
+## 影響
+
+需要更多狀態與對帳邏輯，但可獲得完整稽核、至少一次事件傳遞下的單一交易效果與安全故障恢復。
