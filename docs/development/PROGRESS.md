@@ -6,14 +6,14 @@
 |---|---|---|
 | M1-01 環境驗證 | 本機已完成 | [驗證紀錄](M1-01-VERIFICATION.md) |
 | 本機 Git 機密防護 | 本機已完成 | 2026-11-12 隔離 Repository 提交測試 6 項通過；安全修正 `141ffae9f35f91ecde0e16060ac10d9447d186f0` |
-| M1-02 身分驗證與租戶管理 | 進行中 | 建帳、登入、Session 撤銷、成員管理及受控全域 User 停權已實作；新租戶建立與完整驗收尚未完成 |
-| M1-03 RBAC 與租戶隔離 | 待開始 | 尚未實作 |
+| M1-02 身分驗證與租戶管理 | 本機功能完成，整合驗收待 M1-05 | 密碼雜湊、JWT、Session、首次建帳、受控新租戶、成員管理及全域停權已有測試；空白資料庫初始化案例在既有資料庫跳過 |
+| M1-03 RBAC 與租戶隔離 | 進行中 | 已實作由 JWT、`X-Tenant-ID` 與資料庫 Membership 建立的 Tenant Context；RBAC 與 Warehouse Scope 待完成 |
 | M1-04 React 登入與管理介面 | 待開始 | 尚未實作 |
 | M1-05 CI 與整合驗收 | 待開始 | 尚未實作 |
 
 ## 下一個任務
 
-1. 繼續 M1-02，先補齊新租戶建立後的身分與租戶完整驗收，再評估 M1-03 的 Tenant Context。
+1. 繼續 M1-03，先實作可重用的 Role Policy（角色政策）及權限相依性，再處理 Warehouse Scope（倉庫資料範圍）。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
 ## 2026-11-13 自動續作
@@ -26,6 +26,9 @@
 - 尚未完成：M1-02 完整驗收、M1-03 授權與隔離、M1-04 前端、M1-05 整合驗收。下一項先驗證新租戶建立後的可見性與跨租戶拒絕。
 - 第十三項工作：新增新租戶建立後的 API 整合案例。首位 admin 可登入並查詢新租戶；無成員資格的另一位 User 查詢該租戶回 404，租戶列表為空。合成資料由外層交易回滾。提交 `1a24907`（`test: 驗證新租戶只對管理員可見`）。
 - 回歸測試：重建 API 映像後在 Compose PostgreSQL、Redis 上執行完整 API 測試，29 passed、1 skipped、6 個既有棄用警告。`git diff --cached --check` 與 Gitleaks 掃描 1 個暫存檔均通過；未新增依賴。提交後官方額度為 5 小時剩餘 89%、每週剩餘 83%，可繼續 M1-02 完整驗收。
+- M1-02 本機功能審查：JWT 宣告不含可自行宣稱的 Role／Tenant，受保護端點重新查詢 User、Session 與 Membership；停權及成員撤銷均已測試。新租戶建立僅限資料庫操作員的受控指令。完整 M1 Contract／CI／乾淨資料庫驗收仍列於 M1-05，不宣稱已完成。
+- M1-03 首項：新增 `TenantContext` 相依性與 `GET /api/v1/tenants/current`，每次依 JWT 身分及 `X-Tenant-ID` 查詢啟用租戶的 Membership；跨租戶及停用租戶均回 404。同步 OpenAPI 路徑測試及 API 契約。提交 `7fe6f80`（`feat: 建立可信租戶上下文查詢`）。
+- 測試與安全：Docker API 映像重建、Compose PostgreSQL／Redis 完整 API 測試 29 passed、1 skipped、6 個既有棄用警告；`git diff --cached --check` 通過，Gitleaks 掃描 5 個暫存檔未發現機密；未新增依賴。提交後官方額度為 5 小時剩餘 85%、每週剩餘 82%，可繼續 Role Policy。
 
 ## 2026-11-12 M1-02 自主開發循環
 
