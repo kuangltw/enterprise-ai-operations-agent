@@ -82,6 +82,7 @@ services:
       context: ./apps/api
     environment:
       DATABASE_URL: postgresql+psycopg://${AGENT_DB_USER}:${AGENT_DB_PASSWORD}@agent-db:5432/${AGENT_DB_NAME}
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-}
       ERP_BASE_URL: http://demo-erp:8080
     ports:
       - "127.0.0.1:8000:8000"

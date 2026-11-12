@@ -56,8 +56,8 @@ docker compose down -v
 
 ## 已知限制與 M1 待辦
 
-- 目前只提供健康檢查，尚未實作 Authentication（驗證）、RBAC（角色式存取控制）及 Tenant API。
+- 目前提供健康檢查及 M1-02 的登入、目前使用者與登出端點；使用前須在本機 `.env` 設定至少 32 bytes 的隨機 `JWT_SIGNING_KEY`。未設定或仍為 `change-` 範例值時，登入會回傳 503。User 尚須以受控方式建立，公開註冊、RBAC（角色式存取控制）及 Tenant API 仍未實作。
 - C# ERP 只有商品、倉庫與庫存初始資料模型，尚未實作銷售、採購、實際業務工具 API。
 - EF Core 的啟動自動 Migration 只用於本機 Demo；正式環境改以專用部署 Job 執行。
 - React 前端目前僅有靜態 M1 首頁，尚未接入 API 或登入流程。
-- 跨服務 Contract Test（契約測試）、身分驗證、租戶隔離與安全測試仍未執行；GitHub Actions CI 尚未在遠端執行驗證。
+- 跨服務 Contract Test（契約測試）、完整身分驗證驗收、租戶隔離與安全測試仍未執行；GitHub Actions CI 尚未在遠端執行驗證。

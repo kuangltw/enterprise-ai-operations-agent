@@ -1,0 +1,88 @@
+"""登入、工作階段撤銷及停權的 API 測試。"""
+
+from uuid import uuid4
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+from src.auth import get_db
+from src.main import app
+from src.passwords import hash_password
+from src.settings import settings
+
+
+@pytest.fixture
+def auth_client(monkeypatch):
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+    )
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, status TEXT)"))
+        conn.execute(text("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, expires_at TEXT, revoked_at TEXT)"))
+        conn.execute(text("INSERT INTO users VALUES (:id, :email, :hash, 'active')"), {
+            "id": str(uuid4()), "email": "test@example.invalid",
+            "hash": hash_password("synthetic-password-123"),
+        })
+
+    def override_db():
+        with Session(engine) as db:
+            yield db
+
+    app.dependency_overrides[get_db] = override_db
+    monkeypatch.setattr(settings, "jwt_signing_key", "synthetic-test-only-" * 3)
+    try:
+        yield TestClient(app), engine
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
+
+
+def test_login_me_and_logout_revokes_session(auth_client):
+    client, _ = auth_client
+    response = client.post("/api/v1/auth/login", json={
+        "email": " TEST@example.invalid ", "password": "synthetic-password-123",
+    })
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    assert client.get("/api/v1/auth/me", headers=headers).status_code == 200
+    assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
+    assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
+
+
+def test_invalid_password_and_disabled_user_are_rejected(auth_client):
+    client, engine = auth_client
+    login = {"email": "test@example.invalid", "password": "wrong-password"}
+    response = client.post("/api/v1/auth/login", json=login)
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "INVALID_CREDENTIALS"
+
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE users SET status='disabled'"))
+    login["password"] = "synthetic-password-123"
+    assert client.post("/api/v1/auth/login", json=login).status_code == 401
+
+
+def test_missing_signing_key_fails_closed(auth_client, monkeypatch):
+    client, _ = auth_client
+    monkeypatch.setattr(settings, "jwt_signing_key", None)
+    response = client.post("/api/v1/auth/login", json={
+        "email": "test@example.invalid", "password": "synthetic-password-123",
+    })
+    assert response.status_code == 503
+
+
+def test_missing_token_is_rejected(auth_client):
+    client, _ = auth_client
+    assert client.get("/api/v1/auth/me").status_code == 401
+
+
+def test_openapi_contains_auth_contract():
+    paths = app.openapi()["paths"]
+    assert "post" in paths["/api/v1/auth/login"]
+    assert "get" in paths["/api/v1/auth/me"]
+    assert "post" in paths["/api/v1/auth/logout"]

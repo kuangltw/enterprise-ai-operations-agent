@@ -1,11 +1,29 @@
 """M1 API 骨架：僅提供健康檢查，未開放受保護的業務端點。"""
-from fastapi import FastAPI, HTTPException
-from sqlalchemy import create_engine, text
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
-from .settings import settings
+from uuid import UUID, uuid4
+
+from .db import engine
+from .auth import AuthError, router as auth_router
 
 app = FastAPI(title="Enterprise AI Operations Agent API", version="0.1.0")
-engine = create_engine(settings.database_url, pool_pre_ping=True)
+app.include_router(auth_router)
+
+
+@app.exception_handler(AuthError)
+def auth_error_handler(request: Request, exc: AuthError) -> JSONResponse:
+    request_id = request.headers.get("X-Request-ID", "")
+    try:
+        trace_id = str(UUID(request_id))
+    except ValueError:
+        trace_id = str(uuid4())
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": exc.code, "message": exc.message,
+                           "details": {}, "trace_id": trace_id}},
+    )
 
 @app.get("/health/live", tags=["健康檢查"])
 def liveness() -> dict[str, str]:

@@ -1,6 +1,6 @@
 # API Contract（API 介面契約）v0.1
 
-> 本文件為預定規格；截至 2026-11-12 尚未實作任何 Endpoint（端點）。
+> 本文件包含已實作的 M1 身分驗證端點與後續預定規格；尚未完成租戶及業務端點。
 
 ## 1. 共通規範
 
@@ -27,6 +27,16 @@
 ```
 
 狀態碼：400 參數錯誤、401 未登入、403 無權限、404 不存在或不可存取、409 衝突、422 Schema 驗證失敗、429 速率限制、503 依賴服務不可用。
+
+### 已實作：身分驗證端點
+
+| Method | Endpoint | 功能 |
+|---|---|---|
+| POST | `/auth/login` | 以 Email 與密碼登入，回傳 15 分鐘有效的 JWT |
+| GET | `/auth/me` | 驗證 JWT、使用者狀態與未撤銷 Session，回傳使用者 ID 及 Email |
+| POST | `/auth/logout` | 撤銷目前 Session，回傳 204 |
+
+登入請求：`{"email":"user@example.invalid","password":"<password>"}`。成功回應包含 `access_token`、`token_type`（`Bearer`）及 UTC `expires_at`。JWT 的 `sub` 為 User ID、`jti` 為 Session ID；每次存取受保護端點必須重新檢查資料庫狀態。登入與身分驗證錯誤回傳上述 `error` 格式；422 請求結構錯誤仍使用 FastAPI 預設格式，待 M1-05 統一。尚未提供 Refresh Token（更新憑證）、公開註冊或租戶選擇 API。
 
 ## 2. SOP Knowledge（知識庫）API
 
