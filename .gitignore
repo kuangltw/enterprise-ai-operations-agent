@@ -24,3 +24,20 @@ Thumbs.db
 coverage/
 htmlcov/
 *.log
+
+# 額外私密設定與金鑰
+*.pem
+*.p12
+*.pfx
+*.key
+*.jks
+*.kdbx
+id_rsa
+id_ed25519
+**/credentials.json
+**/service-account.json
+**/appsettings.Production.json
+*.dump
+*.bak
+# 本機掃描暫存及測試快取
+.gitleaks/
