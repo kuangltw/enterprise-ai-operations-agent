@@ -49,10 +49,14 @@
 | GET | `/tenants` | 只列出目前使用者所屬且啟用的租戶，使用 UUID `cursor` 分頁，每頁最多 50 筆 |
 | GET | `/tenants/{tenant_id}` | 查詢目前使用者所屬的啟用租戶；其他租戶及不存在的租戶均回 404 |
 | POST | `/tenants/{tenant_id}/members` | 該租戶 admin 建立新 User 與 manager、staff 或 viewer Membership；回傳 201 |
+| PATCH | `/tenants/{tenant_id}/members/{user_id}` | 該租戶 admin 變更非 admin 成員角色；回傳更新後成員 |
+| DELETE | `/tenants/{tenant_id}/members/{user_id}` | 該租戶 admin 撤銷非 admin 成員資格；回傳 204 |
 
 列表回應為 `{"items":[{"id":"<uuid>","name":"合成租戶","role":"staff"}],"next_cursor":null}`。前兩個讀取端點只供租戶選擇與呈現；後續受保護業務端點仍須重新驗證 `X-Tenant-ID` 與 Membership。
 
-新增成員請求為 `{"email":"new@example.invalid","password":"<password>","role":"staff"}`，回應包含新 User 的 `id`、`tenant_id`、正規化後的 `email` 與 `role`，不回傳密碼或雜湊。端點在同筆交易建立 User 與 Membership，鎖定呼叫者在該租戶的 admin Membership。無成員資格或租戶停用回 404，非 admin 回 403，Email 已存在回 409；不得藉此建立其他租戶的成員或新的 admin。角色變更、停權與管理既有 User 仍待實作。
+新增成員請求為 `{"email":"new@example.invalid","password":"<password>","role":"staff"}`，回應包含新 User 的 `id`、`tenant_id`、正規化後的 `email` 與 `role`，不回傳密碼或雜湊。端點在同筆交易建立 User 與 Membership，鎖定呼叫者在該租戶的 admin Membership。無成員資格或租戶停用回 404，非 admin 回 403，Email 已存在回 409；不得藉此建立其他租戶的成員或新的 admin。
+
+角色變更請求為 `{"role":"manager"}`，僅允許 manager、staff 或 viewer。撤銷只刪除指定租戶的 Membership，User 在其他租戶的成員資格不受影響；已撤銷者下一次租戶查詢立即看不到該租戶。不可修改 admin Membership。全域 User 停權與新租戶建立仍待設計與實作。
 
 ## 2. SOP Knowledge（知識庫）API
 

@@ -79,6 +79,8 @@ def test_login_and_revocation_against_postgres(monkeypatch):
                                json=member_body).status_code == 403
             assert client.post(f"/api/v1/tenants/{other_tenant_id}/members", headers=headers,
                                json=member_body).status_code == 404
+            assert client.patch(f"/api/v1/tenants/{own_tenant_id}/members/{other_user_id}",
+                                headers=headers, json={"role": "manager"}).status_code == 403
             connection.execute(text("UPDATE tenants SET status='suspended' WHERE id=:id"),
                                {"id": str(own_tenant_id)})
             assert client.get("/api/v1/tenants", headers=headers).json()["items"] == []
@@ -139,6 +141,25 @@ def test_admin_creates_member_only_in_own_tenant(monkeypatch):
                 WHERE u.email = 'new@example.invalid' AND m.tenant_id = :tenant_id
             """), {"tenant_id": str(tenant_id)}).mappings().one()
             assert member["role"] == "viewer"
+            new_user_id = created.json()["id"]
+            new_login = client.post("/api/v1/auth/login", json={
+                "email": "new@example.invalid", "password": "synthetic-password-123",
+            })
+            assert new_login.status_code == 200
+            new_headers = {"Authorization": f"Bearer {new_login.json()['access_token']}"}
+            assert len(client.get("/api/v1/tenants", headers=new_headers).json()["items"]) == 1
+
+            updated = client.patch(f"/api/v1/tenants/{tenant_id}/members/{new_user_id}",
+                                   headers=headers, json={"role": "staff"})
+            assert updated.status_code == 200
+            assert updated.json()["role"] == "staff"
+            assert client.patch(f"/api/v1/tenants/{foreign_tenant_id}/members/{new_user_id}",
+                                headers=headers, json={"role": "viewer"}).status_code == 404
+            assert client.delete(f"/api/v1/tenants/{tenant_id}/members/{admin_id}",
+                                 headers=headers).status_code == 403
+            assert client.delete(f"/api/v1/tenants/{tenant_id}/members/{new_user_id}",
+                                 headers=headers).status_code == 204
+            assert client.get("/api/v1/tenants", headers=new_headers).json()["items"] == []
         finally:
             app.dependency_overrides.clear()
             outer.rollback()
