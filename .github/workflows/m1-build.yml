@@ -13,6 +13,28 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/test
+      REDIS_URL: redis://localhost:6379/0
+      RUN_POSTGRES_TESTS: '1'
+      RUN_REDIS_TESTS: '1'
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,9 +44,12 @@ jobs:
         run: pip install -r apps/api/requirements-dev.txt
       - name: Python 語法檢查
         run: python -m compileall -q apps/api/src apps/api/migrations
-      - name: 單元測試
+      - name: 套用 Alembic Migration
         working-directory: apps/api
-        run: pytest -q
+        run: alembic upgrade head
+      - name: 單元與 PostgreSQL、Redis 整合測試
+        working-directory: apps/api
+        run: pytest -p no:cacheprovider -q
 
   dotnet:
     runs-on: ubuntu-latest
