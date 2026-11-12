@@ -10,12 +10,18 @@
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
 | M1-05 CI 與整合驗收 | Accepted with Known Issues（有條件驗收通過） | `66aabc9` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本次隔離 E2E 4 passed；單次登出 500 留存[獨立追蹤](issues/LOGOUT-500.md) |
-| M2 RAG | 文件資料庫基礎及單一文件中繼資料讀取已實作並測試 | `0006_documents`、跨租戶約束與 ACL 保護的 `GET /documents/{id}`；上傳、MinIO、解析、索引、問答仍未實作 |
+| M2 RAG | 文件資料庫、ACL 中繼資料讀取及 MinIO 儲存元件已實作並測試 | `0006_documents`、ACL 保護的 `GET /documents/{id}`、隔離 MinIO 寫入／讀回；上傳 API、解析、索引、問答仍未實作 |
 
 ## 下一個任務
 
-1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為受控文件上傳與 MinIO 原始文件儲存的最小切分；先決定上傳限制與失敗補償，再實作。
+1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為文件上傳 API：確認建立文件、MinIO 寫入、資料庫交易與失敗補償的順序，並補 Contract／Integration Test。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2 MinIO 原始文件儲存元件
+
+- 依 [MinIO Python SDK 官方 API](https://github.com/minio/minio-py/blob/master/docs/API.md) 的 `put_object` 介面，新增固定版本 `minio==7.2.20`。`object_storage.store_pdf` 只接受最多 10 MiB、具 `%PDF-` 檔頭的輸入；使用伺服器產生的 UUID 物件鍵，固定 `application/pdf`，回傳 SHA256 與大小，不使用使用者檔名。此檔頭檢查不等同安全掃描或完整 PDF 驗證。
+- 在獨立 tmpfs MinIO 容器執行寫入、讀回、格式與大小拒絕、刪除的整合測試，結果 **1 passed**，容器已清理。`pip-audit -r requirements-dev.txt --progress-spinner off` 回報 **No known vulnerabilities found**。目前儲存元件沒有對外 API；私有 Bucket 建立、租戶授權、資料庫交易、上傳失敗補償、惡意檔掃描與解析沙箱仍待後續工作。MinIO 伺服器映像來源的信任評估仍未完成。
+- 本輪開始時官方 5 小時與每週額度均剩餘 100%；文件讀取 API 已提交 `d9e51f3`，未 Push。此項提交 SHA 以本輪 Git 紀錄為準。
 
 ## 2026-11-13 M2 文件讀取 API
 

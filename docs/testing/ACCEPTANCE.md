@@ -13,7 +13,7 @@
 
 ## 2. SOP Knowledge（知識問答）
 
-M2 目前僅完成文件、版本及 ACL 的資料庫基礎，以及受 Tenant Membership 與 ACL 保護的單一文件中繼資料讀取；下列 RAG-T01–T10 仍未完成驗收。
+M2 目前僅完成文件、版本及 ACL 的資料庫基礎、受 Tenant Membership 與 ACL 保護的單一文件中繼資料讀取，以及隔離 MinIO 原始 PDF 儲存元件測試；上傳 API 與索引任務尚未實作，下列 RAG-T01–T10 仍未完成驗收。
 
 | ID | 測試情境 | 預期結果 |
 |---|---|---|

@@ -38,6 +38,8 @@ M1-03 已建立可重用的 Role Policy（角色政策）：`tenant.read` 開放
 | 惡意上傳檔案 | 類型／大小限制、解析沙箱、掃描與逾時 | Security Test |
 | 資源耗盡 | Rate Limit（速率限制）、Token／Tool Budget、並行限制 | Load Test |
 
+M2 原始 PDF 儲存元件已限制 10 MiB，使用伺服器產生的物件鍵與固定 Content Type（內容類型）；`%PDF-` 檔頭檢查只能排除明顯不符格式的檔案。公開上傳前仍須完成私有 Bucket 設定、惡意檔掃描、解析沙箱、租戶授權及失敗補償測試。
+
 ## 4. 資料與金鑰管理
 
 - GitHub 公開程式庫只允許 Synthetic Data（合成資料）。

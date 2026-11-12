@@ -158,7 +158,7 @@ CREATE TABLE document_chunks (
 
 必要不變條件：發佈的 `current_version` 必須存在、索引為 `ready`；Owner（擁有者）必須是同 Tenant 的成員；重複 SHA256 應以交易鎖及明確版本政策處理。Qdrant Payload（負載欄位）應帶 `tenant_id`、`document_id`、`version_id`、`chunk_id`、`allowed_roles`。檢索後仍需由 PostgreSQL 重新檢查 ACL。
 
-目前資料庫只保證 `current_version` 指向現有且同租戶的版本；**`ready` 後發布、Owner 成員資格、同 SHA256 去重與檢索時 ACL 重驗尚未實作**。在對應 API／交易測試完成前，不可開放文件上傳或查詢。
+目前資料庫只保證 `current_version` 指向現有且同租戶的版本；**`ready` 後發布、Owner 成員資格、同 SHA256 去重與檢索時 ACL 重驗尚未實作**。現行單一文件 Metadata 讀取已有 Tenant Membership 與 ACL 檢查；在對應 API／交易測試完成前，不可開放原文上傳、原文讀取或知識檢索。
 
 ## 5. Agent 執行歷程
 
