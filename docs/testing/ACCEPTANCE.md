@@ -111,6 +111,8 @@ ASP.NET Core Demo ERP 需具備 Transaction（交易）、Unique Constraint（�
 
 ## 9. M1-05 身分驗證與整合驗收（2026-11-13）
 
+**判定：Accepted with Known Issues（有條件驗收通過）。** M1 完成條件為環境可啟動、Migration、FastAPI 身分驗證、租戶隔離、React 登入流程與 CI；第 2–6 節及第 8 節的 RAG、ERP、採購、監控與完整產品發布檢核屬後續階段，並非 M1 完成條件。
+
 | 項目 | 本機結果 | 尚待確認 |
 |---|---|---|
 | FastAPI Unit／Integration／Contract Test | PostgreSQL／Redis 完整測試 39 passed、1 skipped；OpenAPI Bearer 與錯誤格式已有契約測試 | 空白資料庫初始化案例因既有資料庫非空而跳過；隔離 E2E 的 Alembic 已在新建資料庫套用 |
@@ -120,4 +122,6 @@ ASP.NET Core Demo ERP 需具備 Transaction（交易）、Unique Constraint（�
 | Playwright Test | 獨立 tmpfs 資料庫、合成帳號；六個新的本機環境各 4 passed，遠端 E2E 4 passed，涵蓋登入、錯誤密碼、租戶切換、跨租戶拒絕及登出 | 曾一次登出回 500，後續未重現，根因未確認 |
 | GitHub Actions | 遠端 `6af29ac` 的 [M1 建置](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43319565777)五個 Job 與[機密掃描](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43319565690)均成功 | CI 成功不構成單次 500 已修復的證據 |
 
-因此 **M1 尚未標示完成**：單次登出 500 的根因未確認，須在其餘完成條件複核時列為風險。隔離 E2E 的合成密碼及金鑰於每次執行時產生，不提交 Git，也不輸出至公開 Log；測試容器與網路在結束時清理，不刪除現有 Docker Volume。
+本次核對：本機 `HEAD` 與 GitHub `main` 同為 `66aabc9`，開始時工作目錄乾淨。[最新 M1 CI](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43320328553)的 Python（含 Alembic Migration、測試）、dotnet（含 EF Core Migration 模型檢查）、frontend（含 npm audit）、compose、e2e 五項 Job 均成功；[最新 Gitleaks](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43320328556)成功。本機最後一次隔離完整 E2E 為 4 passed；新增的 SQLite 再次登出測試為 7 passed。既有本機 PostgreSQL 整合測試曾為 39 passed、1 skipped；新增的 PostgreSQL 再次登出斷言尚未於 CI 執行。M1-01 的環境啟動、Alembic／EF Core Migration、健康檢查已有驗證紀錄；新建隔離資料庫的 E2E 也已套用 Alembic。
+
+截至本次調查，沒有可重現的 HTTP 500、Session 撤銷缺陷、跨租戶洩漏或失敗的必要 M1 測試。登出曾有單次 500，根因未確認，**不宣稱已修復**；列為[獨立待追蹤 Known Issue](../development/issues/LOGOUT-500.md)。若符合該紀錄的重新開啟條件，恢復 Blocker。合成密碼及金鑰不提交 Git，也不輸出至公開 Log；隔離測試只清理該次容器與網路。

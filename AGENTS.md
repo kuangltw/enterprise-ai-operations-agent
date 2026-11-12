@@ -1,6 +1,6 @@
 # AI Coding（AI 輔助程式開發）協作規範
 
-本 Repository 已完成 M1-01 本機環境驗證，正在進行 M1 身分驗證與安全基礎工作。開始寫程式前，先閱讀 `README.md` 及 `docs/` 中的架構、Schema、API、Workflow、安全與驗收文件。
+本 Repository 的 M1 已於 2026-11-13 標記為 Accepted with Known Issues（有條件驗收通過），目前進行 M2 文件與 RAG 開發。開始寫程式前，先閱讀 `README.md` 及 `docs/` 中的架構、Schema、API、Workflow、安全與驗收文件。
 
 ## 語言與版本管理規範
 
@@ -34,7 +34,7 @@
 ## 自主開發循環與機密防護（強制）
 
 - 使用 Codex Desktop 時，必須遵守 [AUTONOMOUS_LOOP.md](docs/development/AUTONOMOUS_LOOP.md)，並以 [PROGRESS.md](docs/development/PROGRESS.md) 記錄每輪任務。
-- 自主循環限於 M1-02 → M1-03 → M1-04 → M1-05，M1-01 已完成本機驗證；不得自行進入 M2。
+- M1 階段限制已依[驗收決策](docs/testing/ACCEPTANCE.md)解除；M2 依 [PROGRESS.md](docs/development/PROGRESS.md) 的工作清單逐項進行，不得一次實作完整 RAG，也不得自行進入 M3。
 - 每項小任務依序執行：檢查規格 → 實作 → 測試 → Code Review（程式碼審查）→ Secret Scan（機密掃描）→ 中文 Commit → 更新進度。
 - 額度若能可靠取得官方剩餘數值，任一適用額度 ≤15% 時停止新工作；**無法確認額度時最多完成兩項小任務就停止，要求人工確認**，不得自行估算。
 - 禁止自動 `git push`、Force Push、`git reset --hard`、`git clean`、`docker compose down -v`、修改 Git 歷史或部署到正式環境。

@@ -56,6 +56,8 @@ def test_login_me_and_logout_revokes_session(auth_client):
     assert client.get("/api/v1/auth/me", headers=headers).status_code == 200
     assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
     assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
+    assert client.post("/api/v1/auth/logout", headers=headers).status_code == 401
+    assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
 
 
 def test_invalid_password_and_disabled_user_are_rejected(auth_client):

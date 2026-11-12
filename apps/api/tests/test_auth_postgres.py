@@ -97,6 +97,8 @@ def test_login_and_revocation_against_postgres(monkeypatch):
             }).status_code == 404
             assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
             assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
+            assert client.post("/api/v1/auth/logout", headers=headers).status_code == 401
+            assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
         finally:
             app.dependency_overrides.clear()
             outer.rollback()

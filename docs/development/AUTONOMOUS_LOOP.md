@@ -4,7 +4,7 @@
 
 ## 任務順序
 
-以 `docs/development/PROGRESS.md` 與 `docs/testing/ACCEPTANCE.md` 為基準，從 M1-02 依序完成 M1-03、M1-04、M1-05。M1-01 已經本機驗證，避免重做。**M1 全部完成或遇到阻礙就停止，不擅自進入 M2。**
+以 `docs/development/PROGRESS.md` 與 `docs/testing/ACCEPTANCE.md` 為基準。M1 已於 2026-11-13 有條件驗收通過，可按工作清單從 M2 最小獨立工作開始。**不得一次實作完整 RAG，也不得擅自進入 M3。**
 
 每個小任務：
 1. 讀取現有規格、Git 狀態及進度。

@@ -9,12 +9,28 @@
 | M1-02 身分驗證與租戶管理 | 本機功能完成，整合驗收待 M1-05 | 密碼雜湊、JWT、Session、首次建帳、受控新租戶、成員管理及全域停權已有測試；空白資料庫初始化案例在既有資料庫跳過 |
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
-| M1-05 CI 與整合驗收 | 本機及遠端 CI 已執行，單次登出 500 根因未確認 | `6af29ac` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本機 E2E 多輪通過，仍保留間歇性風險 |
+| M1-05 CI 與整合驗收 | Accepted with Known Issues（有條件驗收通過） | `66aabc9` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本次隔離 E2E 4 passed；單次登出 500 留存[獨立追蹤](issues/LOGOUT-500.md) |
+| M2 RAG | 已開始：工作清單與第一項最小工作 | 見下方 M2 交接；不可將未實作功能標為完成 |
 
 ## 下一個任務
 
-1. 繼續 M1-05：登出 500 已針對性重跑但未重現；若再發生應依 API 例外類型追查。核對其餘 M1 完成條件後再決定是否標示完成，不進入 M2。
+1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。依既有規格執行 M2 最小工作。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M1 驗收決策與 M2 工作清單
+
+- M1 判定：**Accepted with Known Issues（有條件驗收通過）**。GitHub `main` 與本機起始 `HEAD` 同為 `66aabc9488ab8f5fe296c8e20d913f7415ca6180`，工作目錄起始乾淨。[最新 M1 CI](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43320328553)五項 Job 與[最新 Gitleaks](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43320328556)成功。本機最後一次新隔離環境 E2E 為 4 passed；新增再次登出測試的 SQLite 案例為 7 passed。沒有目前可重現的 M1 Blocker；歷史登出 500 根因未確認，見[待追蹤紀錄](issues/LOGOUT-500.md)。新增的 PostgreSQL 斷言待下次 CI 驗證。本輪未執行 Push。
+- M2 工作清單（依相依順序拆為可驗收小項）：
+  1. 文件上傳與版本管理：Metadata、ACL、版本 Schema 與交易不變條件；再實作 API 與 Contract Test。
+  2. MinIO 原始文件儲存：受控物件鍵、檔案大小／類型限制、清理與失敗補償。
+  3. 文件解析與 Chunking（區塊切分）：不可信文件隔離解析、頁碼及可追溯區塊。
+  4. Embedding（向量嵌入）：模型與版本紀錄、批次處理、失敗重試界線。
+  5. Qdrant 索引：帶租戶與 ACL 資訊的可重建索引、Ready 後發布版本。
+  6. Tenant／ACL 權限篩選：檢索前篩選與回應前 PostgreSQL 重驗。
+  7. Hybrid Retrieval（混合檢索）：Dense／Sparse 融合與排序測試。
+  8. Citation（來源引用）：文件版本、區塊、頁碼與原文驗證。
+  9. RAG Evaluation（檢索評估）：固定合成／公開資料集、Recall@5、引用正確率及拒答率。
+- M2 首項僅處理文件 Schema 與約束；上傳、MinIO、解析、索引及問答仍為規劃中。無法可靠取得官方剩餘額度時，本輪最多完成 M1 驗收與 M2 首項兩項小任務，之後停止新工作並要求人工確認。
 
 ## 2026-11-13 自動續作
 

@@ -24,7 +24,15 @@ Playwright 關閉 Trace（追蹤）、Screenshot（截圖）與 Video（錄影�
 - 再於六個新建的隔離環境執行完整 E2E，每輪 4 passed，均未重現登出 500。檢查 Session 約束、登出更新與 Tenant Context 後，尚無足以確認根因的例外紀錄；原失敗所屬容器已在測試結束時清理。依偵錯流程保留失敗證據與後續僅輸出例外類型的診斷，不以猜測修改驗證或授權邏輯。
 - 遠端 `6af29ac` 的 [M1 CI](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43319565777)之 Python、dotnet、frontend、compose、e2e 五個 Job 均成功；E2E Job Log 顯示 4 passed。[Gitleaks 工作](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43319565690)亦成功。這是遠端未重現的證據，不足以證明單次 500 的原因或已修復。
 
-## 尚未完成
+## 最後一次有範圍的調查與判定
 
-- 登出曾出現一次無法重現的 500；若遠端或本機再發生，需依執行器回報的 API 例外類型分析原因並修正。
+- 2026-11-13 於新建的獨立 tmpfs PostgreSQL／Redis 環境執行一次完整 `python scripts/testing/run_m1_e2e.py`，結果 4 passed，未重現 500；執行器以 `docker compose down` 清理該次容器與網路。
+- FastAPI 使用共用 SQLAlchemy Engine（啟用 `pool_pre_ping`）；每個請求由 `get_db` 建立並關閉 Session。登出先由 `get_current_user` 查詢有效且未撤銷的 Session，再以同一 Session 更新及 `commit`。程式未實作額外的服務關閉回呼；檢查期間未發現可確認的連線池、交易或關閉競態。原失敗當次缺少 Traceback，不能推定根因。
+- Playwright 設定 `workers: 1`，案例依序執行；同一組合成帳號供兩個案例登入，但各次登入建立獨立 Session。未發現共用 JWT 或跨案例撤銷；測試結束由執行器清理隔離資源。
+- 登出後舊 JWT 對 `/auth/me` 回 401；再次登出回 401，且後續 `/auth/me` 仍為 401。新增的 SQLite 斷言已通過；PostgreSQL 斷言已加入測試，待下次 CI 驗證。這只證明已測情境，不代表歷史 500 已修復。
+- 歷史失敗與再發時的蒐證、重新列為 Blocker 條件，見[獨立追蹤紀錄](issues/LOGOUT-500.md)。
+
+## 後續追蹤
+
+- 登出曾出現一次無法重現的 500；保留為 Known Issue（已知問題），若再次符合追蹤紀錄的條件，重新列為 Blocker 並調查。
 - 此套測試使用新建的合成資料庫；既有開發資料庫中的真實帳號與租戶未納入測試。

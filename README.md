@@ -1,6 +1,6 @@
 # Enterprise AI Operations Agent（企業 AI 營運代理系統）
 
-> **目前階段：M1 基礎骨架已完成環境驗證，業務功能仍在設計與實作中。** 本 Repository 提供技術規格及可啟動的基礎環境；完整系統尚未通過驗收。
+> **目前階段：M1 已於 2026-11-13 有條件驗收通過，開始 M2 文件與 RAG 開發。** 完整系統及業務功能尚未通過產品驗收；歷史登出 500 保留為[已知問題](docs/development/issues/LOGOUT-500.md)。
 
 本專案是可公開檢視的企業 AI Agent + RAG（檢索增強生成）參考實作，包含 **SOP 知識問答、庫存與銷售分析、採購建議及人工核准、Agent 執行監控**。重點為跨系統整合、權限、安全交易與可復原性。
 
@@ -80,7 +80,7 @@ python scripts/security/check_staged_secrets.py
 
 ## 專案狀態與使用限制
 
-- 目前可用 `docker compose up -d` 啟動 M1 基礎環境；身分驗證、租戶隔離與 React 登入流程已完成本機測試，M1 遠端 CI 已執行。單次登出 500 的原因仍未確認，完整系統尚未通過驗收，業務 API 尚未實作。
+- 目前可用 `docker compose up -d` 啟動 M1 基礎環境；身分驗證、租戶隔離與 React 登入流程已完成測試，M1 遠端 CI 成功並標記為[有條件驗收通過](docs/testing/ACCEPTANCE.md)。單次登出 500 的原因仍未確認；M2 及後續業務 API 尚未完成。
 - 未完成安全、交易一致性及 E2E（端對端）測試前，不可接入真實採購交易。
 - 所有展示資料必須為 Synthetic Data（合成資料），禁止提交真實企業資料、個資與密鑰。
 - 本專案採用 Apache License 2.0（Apache 2.0 開源授權），詳見 [LICENSE](LICENSE)；第三方套件與整合服務仍須依各自授權條款評估。
