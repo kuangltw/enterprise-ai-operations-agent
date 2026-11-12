@@ -160,6 +160,24 @@ def test_admin_creates_member_only_in_own_tenant(monkeypatch):
             new_headers = {"Authorization": f"Bearer {new_login.json()['access_token']}"}
             assert len(client.get("/api/v1/tenants", headers=new_headers).json()["items"]) == 1
 
+            connection.execute(text("""
+                INSERT INTO tenant_warehouses (tenant_id, warehouse_code)
+                VALUES (:tenant_id, 'WH-TEST')
+            """), {"tenant_id": str(tenant_id)})
+            scope_path = f"/api/v1/tenants/{tenant_id}/members/{new_user_id}/warehouse-scopes/WH-TEST"
+            assert client.put(scope_path, headers=new_headers).status_code == 403
+            assert client.put(scope_path.replace(str(tenant_id), str(foreign_tenant_id)),
+                              headers=headers).status_code == 404
+            assert client.put(scope_path, headers=headers).status_code == 200
+            assert client.put(scope_path, headers=headers).status_code == 200
+            new_headers["X-Tenant-ID"] = str(tenant_id)
+            scopes = client.get("/api/v1/tenants/current/warehouse-scopes", headers=new_headers)
+            assert scopes.json()["items"] == ["WH-TEST"]
+            assert client.delete(scope_path, headers=headers).status_code == 204
+            assert client.get("/api/v1/tenants/current/warehouse-scopes",
+                              headers=new_headers).json()["items"] == []
+            assert client.put(scope_path, headers=headers).status_code == 200
+
             updated = client.patch(f"/api/v1/tenants/{tenant_id}/members/{new_user_id}",
                                    headers=headers, json={"role": "staff"})
             assert updated.status_code == 200
@@ -171,6 +189,10 @@ def test_admin_creates_member_only_in_own_tenant(monkeypatch):
             assert client.delete(f"/api/v1/tenants/{tenant_id}/members/{new_user_id}",
                                  headers=headers).status_code == 204
             assert client.get("/api/v1/tenants", headers=new_headers).json()["items"] == []
+            assert connection.execute(text("""
+                SELECT COUNT(*) FROM membership_warehouse_scopes
+                WHERE tenant_id = :tenant_id AND user_id = :user_id
+            """), {"tenant_id": str(tenant_id), "user_id": new_user_id}).scalar_one() == 0
         finally:
             app.dependency_overrides.clear()
             outer.rollback()

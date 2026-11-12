@@ -54,12 +54,16 @@
 | POST | `/tenants/{tenant_id}/members` | 該租戶 admin 建立新 User 與 manager、staff 或 viewer Membership；回傳 201 |
 | PATCH | `/tenants/{tenant_id}/members/{user_id}` | 該租戶 admin 變更非 admin 成員角色；回傳更新後成員 |
 | DELETE | `/tenants/{tenant_id}/members/{user_id}` | 該租戶 admin 撤銷非 admin 成員資格；回傳 204 |
+| PUT | `/tenants/{tenant_id}/members/{user_id}/warehouse-scopes/{warehouse_code}` | 該租戶 admin 對現有成員授予已登錄至本租戶的倉庫範圍；重複執行安全 |
+| DELETE | `/tenants/{tenant_id}/members/{user_id}/warehouse-scopes/{warehouse_code}` | 該租戶 admin 撤銷成員的指定倉庫範圍；回傳 204 |
 
 列表回應為 `{"items":[{"id":"<uuid>","name":"合成租戶","role":"staff"}],"next_cursor":null}`。前兩個讀取端點只供租戶選擇與呈現；後續受保護業務端點仍須重新驗證 `X-Tenant-ID` 與 Membership。
 
 `GET /tenants/current` 必須同時帶有效 JWT 與 `X-Tenant-ID`。Header 只表示選擇；後端從資料庫檢查啟用租戶及目前 User 的 Membership，其他租戶回 404，停用租戶回 404。此端點供 M1-03 的授權相依性驗證；未授權倉庫範圍仍待後續實作。
 
 倉庫範圍端點也需有效 JWT 與 `X-Tenant-ID`，先檢查 `inventory.read` 角色權限，再以 `(tenant_id, user_id, warehouse_code)` 查詢明確授權。列表回應為 `{"items":["WH-001"],"next_cursor":null}`；使用代碼字串 `cursor` 分頁，每頁最多 50 筆。目前只提供授權代碼查詢，尚未查詢 ERP 倉庫資料或驗證其租戶歸屬。授權寫入與 ERP 讀取必須在後續工作補上雙重檢查。
+
+倉庫範圍寫入須先由資料庫操作員核對 ERP 歸屬並登錄 `tenant_warehouses`。租戶 admin 只能將本租戶已登錄的代碼授予本租戶現有成員；跨租戶、未知成員、未登錄代碼均回 404，非 admin 回 403。`PUT` 回 `{"warehouse_code":"WH-001"}`；重複 `PUT` 不新增重複資料列，Membership 撤銷時倉庫 Scope 由外鍵連動刪除。此流程不取代 ERP Read API 實際執行點的租戶與倉庫權限再驗證。
 
 新增成員請求為 `{"email":"new@example.invalid","password":"<password>","role":"staff"}`，回應包含新 User 的 `id`、`tenant_id`、正規化後的 `email` 與 `role`，不回傳密碼或雜湊。端點在同筆交易建立 User 與 Membership，鎖定呼叫者在該租戶的 admin Membership。無成員資格或租戶停用回 404，非 admin 回 403，Email 已存在回 409；不得藉此建立其他租戶的成員或新的 admin。
 

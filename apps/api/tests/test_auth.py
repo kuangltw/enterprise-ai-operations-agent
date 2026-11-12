@@ -98,6 +98,9 @@ def test_openapi_contains_auth_contract():
     assert "post" in paths["/api/v1/tenants/{tenant_id}/members"]
     assert "patch" in paths["/api/v1/tenants/{tenant_id}/members/{user_id}"]
     assert "delete" in paths["/api/v1/tenants/{tenant_id}/members/{user_id}"]
+    scope_path = "/api/v1/tenants/{tenant_id}/members/{user_id}/warehouse-scopes/{warehouse_code}"
+    assert "put" in paths[scope_path]
+    assert "delete" in paths[scope_path]
 
 
 def test_login_limit_and_redis_outage_fail_closed(auth_client):

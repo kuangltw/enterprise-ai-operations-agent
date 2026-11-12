@@ -82,6 +82,16 @@ def get_managed_member(tenant_id: UUID, user_id: UUID, db: Session) -> dict:
     return dict(row)
 
 
+def require_member(tenant_id: UUID, user_id: UUID, db: Session) -> None:
+    found = db.execute(text("""
+        SELECT 1 FROM memberships
+        WHERE tenant_id = :tenant_id AND user_id = :user_id FOR UPDATE
+    """), {"tenant_id": str(tenant_id),
+           "user_id": str(user_id)}).scalar_one_or_none()
+    if found is None:
+        raise AuthError(404, "MEMBER_NOT_FOUND", "成員不存在或無法存取")
+
+
 @router.get("", response_model=TenantList)
 def list_tenants(
     cursor: UUID | None = None,
@@ -213,4 +223,53 @@ def revoke_membership(
     db.execute(text("""
         DELETE FROM memberships WHERE tenant_id = :tenant_id AND user_id = :user_id
     """), {"tenant_id": str(tenant_id), "user_id": str(user_id)})
+    db.commit()
+
+
+@router.put("/{tenant_id}/members/{user_id}/warehouse-scopes/{warehouse_code}")
+def grant_warehouse_scope(
+    tenant_id: UUID,
+    user_id: UUID,
+    warehouse_code: str,
+    principal: Principal = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    require_tenant_admin(tenant_id, principal, db)
+    require_member(tenant_id, user_id, db)
+    if not 1 <= len(warehouse_code) <= 80 or warehouse_code != warehouse_code.strip():
+        raise AuthError(404, "WAREHOUSE_NOT_FOUND", "倉庫不存在或無法存取")
+    registered = db.execute(text("""
+        SELECT 1 FROM tenant_warehouses
+        WHERE tenant_id = :tenant_id AND warehouse_code = :warehouse_code
+    """), {"tenant_id": str(tenant_id),
+           "warehouse_code": warehouse_code}).scalar_one_or_none()
+    if registered is None:
+        raise AuthError(404, "WAREHOUSE_NOT_FOUND", "倉庫不存在或無法存取")
+    db.execute(text("""
+        INSERT INTO membership_warehouse_scopes (tenant_id, user_id, warehouse_code)
+        VALUES (:tenant_id, :user_id, :warehouse_code)
+        ON CONFLICT DO NOTHING
+    """), {"tenant_id": str(tenant_id), "user_id": str(user_id),
+           "warehouse_code": warehouse_code})
+    db.commit()
+    return {"warehouse_code": warehouse_code}
+
+
+@router.delete("/{tenant_id}/members/{user_id}/warehouse-scopes/{warehouse_code}",
+               status_code=status.HTTP_204_NO_CONTENT)
+def revoke_warehouse_scope(
+    tenant_id: UUID,
+    user_id: UUID,
+    warehouse_code: str,
+    principal: Principal = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    require_tenant_admin(tenant_id, principal, db)
+    require_member(tenant_id, user_id, db)
+    db.execute(text("""
+        DELETE FROM membership_warehouse_scopes
+        WHERE tenant_id = :tenant_id AND user_id = :user_id
+          AND warehouse_code = :warehouse_code
+    """), {"tenant_id": str(tenant_id), "user_id": str(user_id),
+           "warehouse_code": warehouse_code})
     db.commit()
