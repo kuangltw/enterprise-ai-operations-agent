@@ -22,6 +22,33 @@ class DocumentMetadata(BaseModel):
     created_at: datetime
 
 
+class DocumentList(BaseModel):
+    items: list[DocumentMetadata]
+    next_cursor: UUID | None
+
+
+@router.get("", response_model=DocumentList)
+def list_documents(
+    cursor: UUID | None = None,
+    context: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+) -> DocumentList:
+    query = """
+        SELECT d.id, d.tenant_id, d.title, d.current_version, d.created_at
+        FROM documents AS d
+        JOIN document_acl AS acl
+          ON acl.tenant_id = d.tenant_id AND acl.document_id = d.id
+        WHERE d.tenant_id = :tenant_id AND d.status = 'active' AND acl.role = :role
+    """
+    parameters = {"tenant_id": str(context.tenant_id), "role": context.role}
+    if cursor is not None:
+        query += " AND d.id > :cursor"
+        parameters["cursor"] = str(cursor)
+    rows = db.execute(text(query + " ORDER BY d.id LIMIT 51"), parameters).mappings().all()
+    items = [DocumentMetadata.model_validate(row) for row in rows[:50]]
+    return DocumentList(items=items, next_cursor=items[-1].id if len(rows) > 50 else None)
+
+
 @router.get("/{document_id}", response_model=DocumentMetadata)
 def get_document_metadata(
     document_id: UUID,

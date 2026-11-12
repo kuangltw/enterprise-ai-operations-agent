@@ -82,7 +82,9 @@
 | POST | `/knowledge/ask` | 產生附來源引用的回答 | 成員 + ACL |
 | DELETE | `/documents/{id}` | 邏輯刪除 | Owner / admin |
 
-M2 第一個唯讀端點 `GET /documents/{id}` 已實作。必須帶 `Authorization: Bearer <JWT>` 與 `X-Tenant-ID`；後端重新驗證有效租戶成員資格，且該成員目前角色須在文件的 `document_acl` 中。只回傳 `status = active` 的文件；文件不存在、屬於其他租戶、已刪除或沒有 ACL 權限時一律回 404 `DOCUMENT_NOT_FOUND`，避免洩漏存在與否。成功回應為 `{"id":"<uuid>","tenant_id":"<uuid>","title":"合成文件","current_version":null,"created_at":"<UTC timestamp>"}`。`current_version` 為 `null` 表示尚未發布版本；此端點不回傳原始文件或索引內容。其餘文件及知識 API 仍為規劃中。
+M2 唯讀端點 `GET /documents/{id}` 已實作。必須帶 `Authorization: Bearer <JWT>` 與 `X-Tenant-ID`；後端重新驗證有效租戶成員資格，且該成員目前角色須在文件的 `document_acl` 中。只回傳 `status = active` 的文件；文件不存在、屬於其他租戶、已刪除或沒有 ACL 權限時一律回 404 `DOCUMENT_NOT_FOUND`，避免洩漏存在與否。成功回應為 `{"id":"<uuid>","tenant_id":"<uuid>","title":"合成文件","current_version":null,"created_at":"<UTC timestamp>"}`。`current_version` 為 `null` 表示尚未發布版本；此端點不回傳原始文件或索引內容。文件上傳、原文讀取及知識 API 仍為規劃中。
+
+`GET /documents` 以相同租戶與 ACL 條件列出未刪除文件，依文件 UUID 遞增排序；每頁最多 50 筆，接受可選的 `cursor` UUID，回傳 `{"items":[<上述 Metadata>],"next_cursor":"<uuid>"}`，末頁的 `next_cursor` 為 `null`。不得從項目數量或游標洩漏其他租戶或無權限文件。
 
 `POST /knowledge/ask` Request（請求）：
 

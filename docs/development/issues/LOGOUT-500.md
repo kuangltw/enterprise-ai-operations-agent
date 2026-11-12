@@ -1,4 +1,4 @@
-# 登出 API 歷史間歇性 HTTP 500（待追蹤）
+# 登出 API 歷史間歇性 HTTP 500（Unreproduced / Tracked，未重現／持續追蹤）
 
 ## 首次發生與重現結果
 
@@ -11,5 +11,7 @@
 根因**尚未確認**，也沒有證據證明歷史 500 已修復。若再次發生，可能造成撤銷交易未完成、Session 狀態不明或認證服務暫時不可用。再次發生時收集 Trace ID／Request ID、UTC 時間、例外類型、SQLSTATE（若有）、安全處理後的 API／PostgreSQL Log、連線池與服務關閉時序，以及登出後原 JWT 對 `/auth/me` 的 HTTP 狀態。不得輸出或保存 JWT、密碼、金鑰、Cookie、完整連線字串及敏感 Log。
 
 以下任一條件成立即重新列為 Blocker：目前可重現登出 HTTP 500；撤銷後舊 JWT 仍有效或再次登出恢復 Session；跨租戶資料洩漏；核心 API、Migration、E2E 或 Gitleaks 測試失敗；有證據顯示重大交易一致性或安全風險。
+
+2026-11-13 後續核對：`7ef7248` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks CI 均成功；Playwright MCP 只驗證錯誤帳密與未登入文件讀取，沒有執行新的登出重現策略。本次沒有新錯誤證據，依 `AGENTS.md` 的退出條件不重啟歷史 500 調查，保留上述重新調查門檻。
 
 GitHub Issue 建立動作於 2026-11-13 被自動審核拒絕，原因為認證與安全風險資訊將持久傳送到尚未確認信任狀態的遠端儲存庫。本檔為獨立的本機待追蹤紀錄；遠端 Issue 尚未建立。
