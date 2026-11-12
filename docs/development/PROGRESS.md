@@ -8,15 +8,20 @@
 | 本機 Git 機密防護 | 本機已完成 | 2026-11-12 隔離 Repository 提交測試 6 項通過；安全修正 `141ffae9f35f91ecde0e16060ac10d9447d186f0` |
 | M1-02 身分驗證與租戶管理 | 本機功能完成，整合驗收待 M1-05 | 密碼雜湊、JWT、Session、首次建帳、受控新租戶、成員管理及全域停權已有測試；空白資料庫初始化案例在既有資料庫跳過 |
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
-| M1-04 React 登入與管理介面 | 本機建置完成，瀏覽器驗收待執行 | 登入、登出、租戶選擇、受保護畫面與 API 錯誤處理已實作；目前瀏覽器工具不可用 |
-| M1-05 CI 與整合驗收 | 進行中 | 422 錯誤契約與 PostgreSQL／Redis CI 測試設定已提交；遠端 CI、瀏覽器驗收及完整回歸待完成 |
+| M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
+| M1-05 CI 與整合驗收 | 本機驗收進行中，遠端 CI 未驗證 | API、提交前安全測試、依賴稽核、Compose、Migration 與 4 項 Playwright E2E 有本機結果；新增的 CI E2E Job 尚未遠端執行 |
 
 ## 下一個任務
 
-1. 繼續 M1-05，先補全 M1 Contract Test（契約測試）與 CI，再完成 Docker Compose、安全及前端驗收。
+1. 繼續 M1-05：先追查間歇性登出 500；取得使用者明確核准後才可 Push，並依遠端 GitHub Actions 結果完成驗收。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
 ## 2026-11-13 自動續作
+
+- M1-05 第六項：新增獨立 tmpfs PostgreSQL／Redis 的 `docker-compose.e2e.yml`、執行時產生合成帳密的跨平台執行器、Playwright Test 四項案例與 GitHub Actions `e2e` Job。驗證未登入、錯誤密碼、登入後租戶切換與登出、跨租戶 404 及撤銷 Session 後 401。功能提交 `83f57a1`（`test: 加入隔離的 Playwright 登入與租戶驗收`）；詳細流程見 [E2E 驗收紀錄](M1-E2E-VERIFICATION.md)。
+- 本機驗證：Headless Chromium 完整測試最後兩次均為 4 passed；`npm run build --prefix apps/web`、提交前安全測試 6 passed、`npm audit --prefix apps/web --audit-level=high` 0 個已知漏洞；E2E 測試容器已清理。首次 seed 因模組路徑缺失失敗，補上隔離容器 `PYTHONPATH` 後解決。另一次 E2E 的跨租戶案例登出請求回 500，後續未重現；保留為未解風險，失敗時執行器僅回報 API 例外類型，不輸出憑證。`git diff --cached --check` 與 Gitleaks 9 個檔案暫存掃描、Hook 再掃描均通過。
+- 待推送範圍：檢查時本機 `main` 相對 `origin/main` 超前 1 筆，即 `83f57a1`，Staged Diff 為空。Gitleaks 對 `origin/main..HEAD` 掃描 1 筆 Commit、約 15.76 KB，未發現機密。遠端追蹤分支已在本輪期間更新，推送前須再核對；未執行 Push。官方額度：此項提交後 5 小時剩餘 58%、每週剩餘 64%。
+- M1 驗收尚未完成：遠端 Python、C#、React、Compose、Secret Scan、Playwright Job 未就本次 E2E Commit 取得結果；乾淨資料庫初始化案例在既有資料庫跳過，隔離 E2E 已驗證 Alembic 建立新資料庫。間歇性登出 500 須持續追查，不得視為已修復。
 
 - 本輪重新查詢官方額度：開始時 5 小時剩餘 98%、每週剩餘 70%；Git 工作區乾淨。瀏覽器控制工具僅回報空的 MCP Apps 分頁及原生 app-server 啟動失敗，Chrome DevTools 也找不到瀏覽器，因此 M1-04 互動驗收尚未執行。
 - M1-05 第三項：受保護 API 於 OpenAPI 宣告 HTTP Bearer Security Scheme，並以 Contract Test 檢查登入端點公開、受保護端點需 Bearer；另驗證錯誤格式的憑證仍回 401。同步 API 契約文件。提交 `46a62bd`（`test: 補齊 Bearer 驗證的 OpenAPI 契約`）。

@@ -1,6 +1,6 @@
 # Acceptance Tests（驗收測試）與 Release Gate（發布門檻）v0.1
 
-> **本文件的業務、效能、安全與發布驗收案例仍為規劃項目，尚未執行。** M1-01 基礎環境建置、Migration 與健康檢查另有[本機驗證紀錄](../development/M1-01-VERIFICATION.md)；該結果不代表下列驗收案例或效能目標已達成。
+> **下列 RAG、ERP 業務、採購、監控、效能及發布案例仍為規劃項目。** M1 身分驗證與租戶隔離的本機測試結果見第 9 節；M1-01 環境驗證另見[本機驗證紀錄](../development/M1-01-VERIFICATION.md)。
 
 ## 1. 測試層級
 
@@ -108,3 +108,16 @@ ASP.NET Core Demo ERP 需具備 Transaction（交易）、Unique Constraint（�
 - [ ] CI（持續整合）全部通過，無已知 Critical（重大）問題。
 
 預估排程不是交付承諾；安全性、資料一致性及可驗證性優先。
+
+## 9. M1-05 身分驗證與整合驗收（2026-11-13）
+
+| 項目 | 本機結果 | 尚待確認 |
+|---|---|---|
+| FastAPI Unit／Integration／Contract Test | PostgreSQL／Redis 完整測試 39 passed、1 skipped；OpenAPI Bearer 與錯誤格式已有契約測試 | 空白資料庫初始化案例因既有資料庫非空而跳過；隔離 E2E 的 Alembic 已在新建資料庫套用 |
+| 提交前安全測試 | 6 passed；暫存區 Gitleaks 與待推送 Commit 範圍掃描均未發現機密 | 本機 Hook 須於其他電腦另行啟用 |
+| 依賴安全稽核 | Python `pip-audit` 未發現已知漏洞；npm audit 回報 0 個漏洞 | Python 依賴未鎖定完整轉接版本；MinIO 第三方 ECR 映像來源仍待評估 |
+| Compose 與建置 | Alembic 重跑、API／Web／Demo ERP 建置、本機 HTTP 就緒與未登入 401 通過 | 遠端 Compose Job 尚未確認 |
+| Playwright Test | 獨立 tmpfs 資料庫、合成帳號，Headless Chromium 4 passed；涵蓋登入、錯誤密碼、租戶切換、跨租戶拒絕及登出 | 曾一次登出回 500，後續未重現；新增的遠端 E2E Job 未執行 |
+| GitHub Actions | 已設定 Python、C#、React、Compose、Secret Scan 與 Playwright Job | 本次 E2E Commit 尚未 Push，不能宣稱遠端 CI 通過 |
+
+因此 **M1 尚未達到完成條件**。先追查間歇性登出 500；取得明確核准後推送至指定分支，再以實際 GitHub Actions 結果核對所有 Job。隔離 E2E 的合成密碼及金鑰於每次執行時產生，不提交 Git，也不輸出至公開 Log；測試容器與網路在結束時清理，不刪除現有 Docker Volume。
