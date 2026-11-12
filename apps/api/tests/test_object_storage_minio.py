@@ -10,7 +10,8 @@ from minio.error import S3Error
 
 from src.object_storage import (
     MAX_PDF_BYTES, InvalidObjectKey, InvalidPdf, PdfTooLarge,
-    StoredPdfMismatch, reserve_pdf_key, store_pdf, verify_stored_pdf,
+    PreparedPdf, StoredPdfMismatch, prepare_pdf, reserve_pdf_key, store_pdf,
+    store_prepared_pdf, verify_stored_pdf,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -29,11 +30,20 @@ def test_store_pdf_uses_generated_key_and_enforces_size():
     client.make_bucket(bucket_name=bucket)
     tenant_id, document_id, version_id = uuid4(), uuid4(), uuid4()
     payload = b"%PDF-1.4\nsynthetic test only\n%%EOF\n"
+    prepared = prepare_pdf(BytesIO(payload))
+    assert prepared.size == len(payload)
+    assert len(prepared.sha256) == 64
 
     reserved_key = reserve_pdf_key(tenant_id, document_id, version_id)
-    stored = store_pdf(client, bucket, tenant_id, document_id, version_id,
-                       BytesIO(payload), reserved_key=reserved_key)
+    stored = store_prepared_pdf(client, bucket, tenant_id, document_id,
+                                version_id, prepared, reserved_key)
     assert stored.key == reserved_key
+    assert stored.sha256 == prepared.sha256
+    with pytest.raises(ValueError):
+        store_prepared_pdf(client, bucket, tenant_id, document_id, version_id,
+                           PreparedPdf(data=payload, sha256="0" * 64,
+                                       size=len(payload)), reserve_pdf_key(
+                                           tenant_id, document_id, version_id))
     assert stored.key.startswith(f"{tenant_id}/{document_id}/{version_id}/")
     assert stored.key.endswith(".pdf")
     assert stored.size == len(payload)
@@ -54,8 +64,7 @@ def test_store_pdf_uses_generated_key_and_enforces_size():
         response.release_conn()
 
     with pytest.raises(InvalidPdf):
-        store_pdf(client, bucket, tenant_id, document_id, uuid4(),
-                  BytesIO(b"not a PDF"))
+        prepare_pdf(BytesIO(b"not a PDF"))
     with pytest.raises(InvalidObjectKey):
         store_pdf(client, bucket, tenant_id, document_id, uuid4(),
                   BytesIO(payload), reserved_key=reserved_key)
@@ -66,8 +75,12 @@ def test_store_pdf_uses_generated_key_and_enforces_size():
         store_pdf(client, bucket, tenant_id, document_id, version_id,
                   BytesIO(payload), reserved_key="")
     with pytest.raises(PdfTooLarge):
-        store_pdf(client, bucket, tenant_id, document_id, uuid4(),
-                  BytesIO(b"%PDF-" + b"x" * MAX_PDF_BYTES))
+        prepare_pdf(BytesIO(b"%PDF-" + b"x" * MAX_PDF_BYTES))
+
+    another = store_pdf(client, bucket, tenant_id, document_id, uuid4(),
+                        BytesIO(payload))
+    assert another.sha256 == prepared.sha256
+    client.remove_object(bucket_name=bucket, object_name=another.key)
 
     client.remove_object(bucket_name=bucket, object_name=stored.key)
     with pytest.raises(S3Error) as error:

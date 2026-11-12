@@ -36,6 +36,13 @@ class StoredPdf:
     size: int
 
 
+@dataclass(frozen=True)
+class PreparedPdf:
+    data: bytes
+    sha256: str
+    size: int
+
+
 def reserve_pdf_key(tenant_id: UUID, document_id: UUID, version_id: UUID) -> str:
     """在資料庫交易前產生不含使用者檔名的版本物件鍵。"""
     return f"{tenant_id}/{document_id}/{version_id}/{uuid4()}.pdf"
@@ -77,6 +84,42 @@ def verify_stored_pdf(client: Minio, bucket: str, tenant_id: UUID,
         response.release_conn()
 
 
+def prepare_pdf(stream: BinaryIO) -> PreparedPdf:
+    """在資料庫交易前限制大小、檢查檔頭並計算原始檔摘要。"""
+    data = bytearray()
+    while chunk := stream.read(min(_READ_BYTES, MAX_PDF_BYTES + 1 - len(data))):
+        data.extend(chunk)
+        if len(data) > MAX_PDF_BYTES:
+            raise PdfTooLarge("PDF 超過大小限制")
+    if not data.startswith(b"%PDF-"):
+        raise InvalidPdf("檔案格式不符 PDF")
+    payload = bytes(data)
+    return PreparedPdf(data=payload, sha256=sha256(payload).hexdigest(),
+                       size=len(payload))
+
+
+def store_prepared_pdf(client: Minio, bucket: str, tenant_id: UUID,
+                       document_id: UUID, version_id: UUID,
+                       prepared: PreparedPdf, reserved_key: str) -> StoredPdf:
+    """將已驗證的 PDF 寫入私有 Bucket，保留原先產生的鍵。"""
+    _validate_key(reserved_key, tenant_id, document_id, version_id)
+    if len(prepared.data) > MAX_PDF_BYTES:
+        raise PdfTooLarge("PDF 超過大小限制")
+    if not prepared.data.startswith(b"%PDF-"):
+        raise InvalidPdf("檔案格式不符 PDF")
+    if (prepared.size != len(prepared.data)
+            or prepared.sha256 != sha256(prepared.data).hexdigest()):
+        raise ValueError("PDF 摘要或大小不一致")
+    client.put_object(
+        bucket_name=bucket,
+        object_name=reserved_key,
+        data=BytesIO(prepared.data),
+        length=prepared.size,
+        content_type="application/pdf",
+    )
+    return StoredPdf(key=reserved_key, sha256=prepared.sha256, size=prepared.size)
+
+
 def store_pdf(
     client: Minio,
     bucket: str,
@@ -91,19 +134,5 @@ def store_pdf(
     key = (reserve_pdf_key(tenant_id, document_id, version_id)
            if reserved_key is None else reserved_key)
     _validate_key(key, tenant_id, document_id, version_id)
-    data = bytearray()
-    while chunk := stream.read(min(_READ_BYTES, MAX_PDF_BYTES + 1 - len(data))):
-        data.extend(chunk)
-        if len(data) > MAX_PDF_BYTES:
-            raise PdfTooLarge("PDF 超過大小限制")
-    if not data.startswith(b"%PDF-"):
-        raise InvalidPdf("檔案格式不符 PDF")
-
-    client.put_object(
-        bucket_name=bucket,
-        object_name=key,
-        data=BytesIO(data),
-        length=len(data),
-        content_type="application/pdf",
-    )
-    return StoredPdf(key=key, sha256=sha256(data).hexdigest(), size=len(data))
+    return store_prepared_pdf(client, bucket, tenant_id, document_id, version_id,
+                              prepare_pdf(stream), key)
