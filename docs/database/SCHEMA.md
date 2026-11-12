@@ -1,31 +1,38 @@
-# PostgreSQL Data Model v0.1
+# PostgreSQL 資料庫 Schema（結構）規格 v0.1
 
-> Logical schema/design specification; **no migration files or running database have been created yet**. PostgreSQL 16+ proposed. UUID primary keys; timestamps stored as `TIMESTAMPTZ` (UTC); quantities/prices stored as `NUMERIC`. Synthetic test data only.
+> **設計規格，尚未建立 Migration（資料庫結構遷移）或執行測試。** 建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
 
-## Entity groups
+## 1. 資料庫邊界
+
+- **Agent 應用資料庫**：身分、文件版本、Agent 執行、採購草稿、核准、Outbox（交易式寄件匣）、稽核紀錄。
+- **C# + ASP.NET Core Demo ERP 資料庫**：商品、倉庫、庫存、銷售、未到貨採購、正式採購單與 ERP 端的 Idempotency（冪等性）紀錄。
+- 優先採用兩個獨立 PostgreSQL Database（資料庫），至少須使用獨立 Schema（結構綱要）與資料庫帳號。兩套系統僅透過 API 整合，不允許 Agent 直接修改 ERP 表格。
+- ASP.NET Core 採 **EF Core + Npgsql** 管理 ERP Migration（結構遷移）；Python Agent 採 **Alembic** 管理應用資料庫 Migration。不要讓兩套 ORM 同時管理同一組表格。
+
+## 2. 應用資料關聯
 
 ```mermaid
 erDiagram
- TENANTS ||--o{ MEMBERSHIPS : contains
- USERS ||--o{ MEMBERSHIPS : joins
- TENANTS ||--o{ DOCUMENTS : owns
- DOCUMENTS ||--o{ DOCUMENT_VERSIONS : has
- DOCUMENTS ||--o{ DOCUMENT_ACL : grants
- DOCUMENT_VERSIONS ||--o{ DOCUMENT_CHUNKS : produces
- TENANTS ||--o{ AGENT_THREADS : owns
- AGENT_THREADS ||--o{ AGENT_RUNS : has
- AGENT_RUNS ||--o{ AGENT_RUN_EVENTS : emits
- AGENT_RUNS ||--o{ PURCHASE_DRAFTS : proposes
- PURCHASE_DRAFTS ||--o{ PURCHASE_DRAFT_ITEMS : contains
- PURCHASE_DRAFTS ||--o{ APPROVALS : versions
- PURCHASE_DRAFTS ||--o| ERP_ACTIONS : executes
- TENANTS ||--o{ OUTBOX_EVENTS : dispatches
+ TENANTS ||--o{ MEMBERSHIPS : "包含"
+ USERS ||--o{ MEMBERSHIPS : "參與"
+ TENANTS ||--o{ DOCUMENTS : "擁有"
+ DOCUMENTS ||--o{ DOCUMENT_VERSIONS : "版本"
+ DOCUMENTS ||--o{ DOCUMENT_ACL : "權限"
+ DOCUMENT_VERSIONS ||--o{ DOCUMENT_CHUNKS : "切分"
+ AGENT_THREADS ||--o{ AGENT_RUNS : "執行"
+ AGENT_RUNS ||--o{ AGENT_RUN_EVENTS : "事件"
+ AGENT_RUNS ||--o{ PURCHASE_DRAFTS : "建議"
+ PURCHASE_DRAFTS ||--o{ PURCHASE_DRAFT_ITEMS : "明細"
+ PURCHASE_DRAFTS ||--o{ APPROVALS : "審核"
+ PURCHASE_DRAFTS ||--o| ERP_ACTIONS : "寫入"
+ TENANTS ||--o{ OUTBOX_EVENTS : "發送"
 ```
 
-## 1. Identity
+## 3. Identity（身分與租戶）
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE tenants (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name varchar(120) NOT NULL,
@@ -33,6 +40,7 @@ CREATE TABLE tenants (
     CHECK (status IN ('active','suspended')),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
 CREATE TABLE users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   email varchar(255) NOT NULL UNIQUE,
@@ -41,6 +49,7 @@ CREATE TABLE users (
     CHECK (status IN ('active','disabled')),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
 CREATE TABLE memberships (
   tenant_id uuid NOT NULL REFERENCES tenants(id),
   user_id uuid NOT NULL REFERENCES users(id),
@@ -50,9 +59,9 @@ CREATE TABLE memberships (
 );
 ```
 
-**Production note:** normalize email addresses with a documented policy and use a uniqueness strategy compatible with that policy; implement password reset/session revocation and privileged-role auditing.
+正式實作要定義 Email 正規化、登入 Session（工作階段）撤銷、停權與權限變更稽核。
 
-## 2. Knowledge
+## 4. Knowledge（文件與索引）
 
 ```sql
 CREATE TABLE documents (
@@ -66,6 +75,7 @@ CREATE TABLE documents (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id,id)
 );
+
 CREATE TABLE document_acl (
   tenant_id uuid NOT NULL,
   document_id uuid NOT NULL,
@@ -75,6 +85,7 @@ CREATE TABLE document_acl (
   FOREIGN KEY (tenant_id,document_id)
     REFERENCES documents(tenant_id,id) ON DELETE CASCADE
 );
+
 CREATE TABLE document_versions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
@@ -87,8 +98,10 @@ CREATE TABLE document_versions (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id,id),
   UNIQUE (tenant_id,document_id,version),
-  FOREIGN KEY (tenant_id,document_id) REFERENCES documents(tenant_id,id)
+  FOREIGN KEY (tenant_id,document_id)
+    REFERENCES documents(tenant_id,id)
 );
+
 CREATE TABLE document_chunks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
@@ -105,11 +118,9 @@ CREATE TABLE document_chunks (
 );
 ```
 
-**Required migration refinement:** add a safe published-version mechanism for `documents.current_version` to ensure the referenced version exists and is `ready`; ensure owner is a member of the document tenant (composite FK or invariant validated transactionally). Never publish a new version until indexing completed. Identical-content uploads require a documented duplicate/version policy, ideally enforced with a transaction lock.
+必要不變條件：發佈的 `current_version` 必須存在、索引為 `ready`；Owner（擁有者）必須是同 Tenant 的成員；重複 SHA256 應以交易鎖及明確版本政策處理。Qdrant Payload（負載欄位）應帶 `tenant_id`、`document_id`、`version_id`、`chunk_id`、`allowed_roles`。檢索後仍需由 PostgreSQL 重新檢查 ACL。
 
-Qdrant payload: `tenant_id, document_id, document_version_id, chunk_id, allowed_roles`, embedding model/version. Filter by server-trusted tenant and ACL before retrieval; revalidate against PostgreSQL before returning snippets.
-
-## 3. Agent runs
+## 5. Agent 執行歷程
 
 ```sql
 CREATE TABLE agent_threads (
@@ -120,6 +131,7 @@ CREATE TABLE agent_threads (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id,id)
 );
+
 CREATE TABLE agent_runs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
@@ -135,8 +147,10 @@ CREATE TABLE agent_runs (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id,id),
   UNIQUE (tenant_id,request_id),
-  FOREIGN KEY (tenant_id,thread_id) REFERENCES agent_threads(tenant_id,id)
+  FOREIGN KEY (tenant_id,thread_id)
+    REFERENCES agent_threads(tenant_id,id)
 );
+
 CREATE TABLE agent_run_events (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   tenant_id uuid NOT NULL,
@@ -146,17 +160,19 @@ CREATE TABLE agent_run_events (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   trace_id varchar(64),
   created_at timestamptz NOT NULL DEFAULT now(),
-  FOREIGN KEY (tenant_id,run_id) REFERENCES agent_runs(tenant_id,id)
+  FOREIGN KEY (tenant_id,run_id)
+    REFERENCES agent_runs(tenant_id,id)
 );
-CREATE INDEX idx_agent_runs_status
+
+CREATE INDEX idx_runs_status
   ON agent_runs(tenant_id,status,created_at DESC);
-CREATE INDEX idx_agent_events_run
+CREATE INDEX idx_run_events
   ON agent_run_events(tenant_id,run_id,id);
 ```
 
-Use LangGraph's supported PostgreSQL checkpoint schema for snapshots; do not invent a second competing snapshot table. Event payloads must be sanitized and bounded.
+LangGraph Checkpoint（流程狀態快照）使用官方 PostgreSQL Checkpointer 管理，不自建重複的 State Snapshot。事件採 Append-only（僅新增），Payload 必須遮蔽機密且限制大小。
 
-## 4. Purchase approval and ERP write
+## 6. 採購草稿、核准與 ERP 寫入
 
 ```sql
 CREATE TABLE purchase_drafts (
@@ -173,8 +189,10 @@ CREATE TABLE purchase_drafts (
   total_amount numeric(16,2) NOT NULL DEFAULT 0 CHECK (total_amount >= 0),
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id,id),
-  FOREIGN KEY (tenant_id,agent_run_id) REFERENCES agent_runs(tenant_id,id)
+  FOREIGN KEY (tenant_id,agent_run_id)
+    REFERENCES agent_runs(tenant_id,id)
 );
+
 CREATE TABLE purchase_draft_items (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
@@ -183,8 +201,10 @@ CREATE TABLE purchase_draft_items (
   suggested_qty numeric(14,3) NOT NULL CHECK (suggested_qty > 0),
   unit_cost numeric(14,2) NOT NULL CHECK (unit_cost >= 0),
   reasoning jsonb NOT NULL DEFAULT '{}'::jsonb,
-  FOREIGN KEY (tenant_id,draft_id) REFERENCES purchase_drafts(tenant_id,id)
+  FOREIGN KEY (tenant_id,draft_id)
+    REFERENCES purchase_drafts(tenant_id,id)
 );
+
 CREATE TABLE approvals (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
@@ -199,8 +219,10 @@ CREATE TABLE approvals (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id,id),
   UNIQUE (tenant_id,draft_id,draft_version),
-  FOREIGN KEY (tenant_id,draft_id) REFERENCES purchase_drafts(tenant_id,id)
+  FOREIGN KEY (tenant_id,draft_id)
+    REFERENCES purchase_drafts(tenant_id,id)
 );
+
 CREATE TABLE erp_actions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL,
@@ -213,8 +235,10 @@ CREATE TABLE erp_actions (
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id,draft_id),
   UNIQUE (tenant_id,idempotency_key),
-  FOREIGN KEY (tenant_id,draft_id) REFERENCES purchase_drafts(tenant_id,id)
+  FOREIGN KEY (tenant_id,draft_id)
+    REFERENCES purchase_drafts(tenant_id,id)
 );
+
 CREATE TABLE outbox_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id uuid NOT NULL REFERENCES tenants(id),
@@ -228,33 +252,34 @@ CREATE TABLE outbox_events (
   available_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
 CREATE INDEX idx_outbox_pending
-  ON outbox_events(status,available_at) WHERE status IN ('pending','failed');
+  ON outbox_events(status,available_at)
+  WHERE status IN ('pending','failed');
 ```
 
-**Transactional invariants (implementation requirements):**
-- Only legal status transitions under row lock / optimistic version check.
-- Draft modifications increment version and invalidate existing approval; freeze draft items while pending/approved.
-- Self-approval denied; approval permission checked against current membership and designated warehouse scope.
-- Decision and outbox insert committed together.
-- ERP endpoint must enforce uniqueness for the same idempotency key; timeout leads to reconciliation, never blind retry.
-- `source_snapshot_hash` detects changes but is not sufficient alone: re-fetch stock, purchasing policy, price and scope before write.
-- Add tenant-scoped user/membership foreign keys, row-level security and business-specific indexes during executable migrations.
+**交易規則**：Draft（草稿）送審後凍結明細；異動必須增加版本並重新核准。核准交易必須鎖定草稿與審核紀錄，同時提交 Outbox Event；ERP 端執行固定冪等鍵唯一約束，寫入結果未知時先對帳。禁止自行核准自己的採購草稿（職責分離）。
 
-## 5. Operational tables (to implement)
+## 7. ASP.NET Core Demo ERP 資料模型（規劃）
 
-| Table | Fields | Purpose |
+由 **EF Core Migration（資料庫結構遷移）** 建立；欄位類型及 FK 待 M3 細化。
+
+| Table | 主要欄位 | 職責 |
 |---|---|---|
-| background_jobs | id, tenant_id, type, status, attempts, next_run_at, payload | Ingestion / retry |
-| audit_logs | id, tenant_id, actor_id, action, resource_id, before_hash, after_hash, created_at | Append-only audit |
-| llm_usage | id, tenant_id, run_id, provider, model, input_tokens, output_tokens, estimated_cost, latency_ms | Model accounting |
-| erp_tool_calls | id, tenant_id, run_id, tool_name, input_hash, output_hash, status, duration_ms | Tool audit |
+| `erp_products` | id、sku、name、unit、is_active | 商品主檔 |
+| `erp_warehouses` | id、code、name | 倉庫主檔 |
+| `erp_inventory` | warehouse_id、product_id、on_hand、reserved、row_version | 庫存與並行版本 |
+| `erp_sales_orders` | id、warehouse_id、status、sold_at | 銷售單主檔 |
+| `erp_sales_items` | sales_order_id、product_id、quantity | 銷售明細 |
+| `erp_purchase_orders` | id、status、idempotency_key、source_draft_id | 採購單主檔 |
+| `erp_purchase_items` | order_id、product_id、quantity、unit_cost | 採購明細 |
+| `erp_suppliers` | id、name、lead_time_days | 供應商交期 |
+| `erp_idempotency_records` | key、payload_hash、status、result_id | 重試去重及對帳 |
 
-## Migration conventions
+ERP 端使用 PostgreSQL Transaction（交易）與 Unique Constraint（唯一約束）保證同一冪等鍵不重複產生採購單。庫存並行更新使用可驗證的版本控制，不依賴 LLM。
 
-- Schema above is an architectural baseline, **not final deployable DDL**.
-- Implement with Alembic and deterministic reversible migrations where feasible.
-- Use compound `(tenant_id,id)` keys and tenant-scoped foreign keys for tenant-owned relationships.
-- Index access patterns by tenant + date/status; verify EXPLAIN on realistic synthetic fixtures.
-- Use `numeric` for business amounts and structured test fixtures for stock arithmetic.
-- Assess PostgreSQL RLS with separate application DB roles; test no bypass via owner/superuser.
+## 8. 待實作營運資料表與 Migration 限制
+
+`background_jobs`、`audit_logs`、`llm_usage`、`erp_tool_calls` 用於工作、稽核、成本與工具歷程。所有 Tenant 資料需補齊複合 `(tenant_id,id)` FK 或等效強制不變條件，並評估 PostgreSQL RLS（資料列層級安全）。
+
+**本文件是 DDL 設計基準，尚非可直接完成部署的最終 Migration。** 落地後應補索引、Owner 成員約束、文件發布版本約束、RLS、安全角色及 SQL EXPLAIN 驗證。
