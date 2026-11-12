@@ -1,6 +1,6 @@
 # Enterprise AI Operations Agent（企業 AI 營運代理系統）
 
-> **目前階段：Design / Pre-implementation（設計中／尚未實作）**。本 Repository 現階段提供技術規格，尚無可執行的正式系統，也尚未通過驗收。
+> **目前階段：M1 基礎骨架已完成環境驗證，業務功能仍在設計與實作中。** 本 Repository 提供技術規格及可啟動的基礎環境；完整系統尚未通過驗收。
 
 本專案是可公開檢視的企業 AI Agent + RAG（檢索增強生成）參考實作，包含 **SOP 知識問答、庫存與銷售分析、採購建議及人工核准、Agent 執行監控**。重點為跨系統整合、權限、安全交易與可復原性。
 
@@ -59,15 +59,15 @@ flowchart TD
 5. **M5**：監控、安全與故障恢復測試。
 6. **M6**：公開 Demo、文件與 Release（發布）。
 
-## M1 基礎骨架（已提交原始碼，尚待執行驗證）
+## M1 基礎骨架（環境驗證已通過）
 
 已加入 React + TypeScript 前端、FastAPI 健康檢查、ASP.NET Core Demo ERP 健康檢查、兩套 PostgreSQL 資料庫、Alembic / EF Core 初始 Migration、Docker Compose 與 CI 建置設定。
 
-啟動方式與已知限制請見 [M1 開發環境指南](docs/development/GETTING_STARTED.md)。本機完成 `docker compose up --build -d` 並通過健康檢查前，不宣稱環境已通過部署測試。
+2026-11-12 的 M1-01 本機驗證已通過 Compose 設定、映像建置、Python 測試、C# 與 React 建置、Alembic／EF Core 初始 Migration，以及兩個 API 的 HTTP 健康檢查。指令、結果及未驗證範圍見 [M1 開發環境指南](docs/development/GETTING_STARTED.md)與 [M1-01 驗證紀錄](docs/development/M1-01-VERIFICATION.md)。這不代表 M1 的身分驗證與租戶隔離已完成。
 
 ## 專案狀態與使用限制
 
-- 目前只有設計文件；尚未提供 `docker compose up` 可啟動的完整環境。
+- 目前可用 `docker compose up -d` 啟動 M1 基礎環境；業務 API、身分驗證、租戶隔離與完整系統仍未完成。
 - 未完成安全、交易一致性及 E2E（端對端）測試前，不可接入真實採購交易。
 - 所有展示資料必須為 Synthetic Data（合成資料），禁止提交真實企業資料、個資與密鑰。
 - 本專案採用 Apache License 2.0（Apache 2.0 開源授權），詳見 [LICENSE](LICENSE)；第三方套件與整合服務仍須依各自授權條款評估。

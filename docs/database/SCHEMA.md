@@ -1,6 +1,6 @@
 # PostgreSQL 資料庫 Schema（結構）規格 v0.1
 
-> **設計規格，尚未建立 Migration（資料庫結構遷移）或執行測試。** 建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
+> **整體仍為設計規格。** M1 的 `tenants`、`users`、`memberships` 與 Demo ERP 商品、倉庫、庫存資料表已有初始 Migration，並於 2026-11-12 在本機 PostgreSQL 驗證；其餘資料表仍未實作。詳見 [M1-01 驗證紀錄](../development/M1-01-VERIFICATION.md)。建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
 
 ## 1. 資料庫邊界
 
@@ -262,7 +262,7 @@ CREATE INDEX idx_outbox_pending
 
 ## 7. ASP.NET Core Demo ERP 資料模型（規劃）
 
-由 **EF Core Migration（資料庫結構遷移）** 建立；欄位類型及 FK 待 M3 細化。
+M1 的商品、倉庫、庫存三張表已由 **EF Core Migration（資料庫結構遷移）** 建立；其餘表及欄位類型、FK 待 M3 細化。
 
 | Table | 主要欄位 | 職責 |
 |---|---|---|
