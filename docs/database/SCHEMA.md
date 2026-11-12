@@ -99,7 +99,7 @@ ALTER TABLE membership_warehouse_scopes ADD CONSTRAINT fk_scope_tenant_warehouse
 
 ## 4. Knowledge（文件與索引）
 
-`0006_documents` 已建立下列 `documents`、`document_versions`、`document_acl` 資料表，並以複合外鍵限制版本、ACL 與已選 `current_version` 必須屬於同一租戶及同一文件。`0007_document_upload_state` 新增儲存狀態及租戶內唯一的可選冪等鍵。`document_chunks` 仍為規劃中。下列 DDL 為設計摘要；實際約束以 Migration 為準。
+`0006_documents` 已建立下列 `documents`、`document_versions`、`document_acl` 資料表，並以複合外鍵限制版本、ACL 與已選 `current_version` 必須屬於同一租戶及同一文件。`0007_document_upload_state` 新增儲存狀態及租戶內唯一的可選冪等鍵；`0008_document_user_acl` 可授權單一租戶成員，成員資格撤銷時連動移除。`document_chunks` 仍為規劃中。下列 DDL 為設計摘要；實際約束以 Migration 為準。
 
 ```sql
 CREATE TABLE documents (
@@ -122,6 +122,17 @@ CREATE TABLE document_acl (
   PRIMARY KEY (tenant_id,document_id,role),
   FOREIGN KEY (tenant_id,document_id)
     REFERENCES documents(tenant_id,id) ON DELETE CASCADE
+);
+
+CREATE TABLE document_user_acl (
+  tenant_id uuid NOT NULL,
+  document_id uuid NOT NULL,
+  user_id uuid NOT NULL,
+  PRIMARY KEY (tenant_id,document_id,user_id),
+  FOREIGN KEY (tenant_id,document_id)
+    REFERENCES documents(tenant_id,id) ON DELETE CASCADE,
+  FOREIGN KEY (tenant_id,user_id)
+    REFERENCES memberships(tenant_id,user_id) ON DELETE CASCADE
 );
 
 CREATE TABLE document_versions (

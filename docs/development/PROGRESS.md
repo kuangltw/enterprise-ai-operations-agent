@@ -10,12 +10,18 @@
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
 | M1-05 CI 與整合驗收 | Accepted with Known Issues（有條件驗收通過） | `66aabc9` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本次隔離 E2E 4 passed；單次登出 500 留存[獨立追蹤](issues/LOGOUT-500.md) |
-| M2 RAG | 文件資料庫、ACL 保護的單筆／列表讀取及 MinIO 儲存元件已實作並測試 | `0006_documents`、`0007_document_upload_state`、`GET /documents`、`GET /documents/{id}`、隔離 MinIO 寫入／讀回；上傳 API、解析、索引、問答仍未實作 |
+| M2 RAG | 文件資料庫、ACL 保護的單筆／列表讀取及 MinIO 儲存元件已實作並測試 | `0006_documents` 至 `0008_document_user_acl`、`GET /documents`、`GET /documents/{id}`、隔離 MinIO 寫入／讀回；上傳 API、解析、索引、問答仍未實作 |
 
 ## 下一個任務
 
 1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為受控文件上傳流程：先確定預留物件鍵、資料庫交易、MinIO 寫入、重試對帳及失敗補償，再補 API、Contract／Integration Test；完成前不開放上傳端點。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2 單一使用者文件授權
+
+- `0008_document_user_acl` 新增 `(tenant_id, document_id, user_id)` 授權表，複合外鍵同時約束文件與租戶成員資格；撤銷成員資格會連動刪除授權。文件單筆與列表查詢允許符合角色 ACL 或指定使用者 ACL 的目前成員，避免未來上傳時因建立者角色而自動讓所有同角色成員讀取。
+- 一次性 tmpfs PostgreSQL 從空白套用 Alembic 至 `0008_document_user_acl` 成功；文件相關整合測試 **4 passed、1 個既有棄用警告**，驗證同租戶同角色的另一位使用者無法單筆讀取或在列表看見私有文件，且撤銷成員資格後授權列連動移除。容器已清理；此項尚未提供 ACL 管理 API 或對外上傳。
+- 本項在 `8b3aed3` 後進行，未 Push；提交 SHA 以 Git 紀錄為準。
 
 ## 2026-11-13 M2 PDF 交易前準備
 

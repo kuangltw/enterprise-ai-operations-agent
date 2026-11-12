@@ -23,7 +23,9 @@ pytestmark = pytest.mark.skipif(
 
 def test_document_metadata_requires_membership_and_matching_acl(monkeypatch):
     user_id, tenant_a, tenant_b, document_a, document_b = (uuid4() for _ in range(5))
+    other_user_id, private_document = uuid4(), uuid4()
     email = f"{uuid4().hex}@example.invalid"
+    other_email = f"{uuid4().hex}@example.invalid"
     with engine.connect() as connection:
         outer = connection.begin()
         try:
@@ -31,6 +33,11 @@ def test_document_metadata_requires_membership_and_matching_acl(monkeypatch):
                 INSERT INTO users (id, email, password_hash)
                 VALUES (:id, :email, :password_hash)
             """), {"id": str(user_id), "email": email,
+                   "password_hash": hash_password("synthetic-password-123")})
+            connection.execute(text("""
+                INSERT INTO users (id, email, password_hash)
+                VALUES (:id, :email, :password_hash)
+            """), {"id": str(other_user_id), "email": other_email,
                    "password_hash": hash_password("synthetic-password-123")})
             for tenant_id in (tenant_a, tenant_b):
                 connection.execute(text("""
@@ -40,6 +47,20 @@ def test_document_metadata_requires_membership_and_matching_acl(monkeypatch):
                     INSERT INTO memberships (tenant_id, user_id, role)
                     VALUES (:tenant_id, :user_id, 'viewer')
                 """), {"tenant_id": str(tenant_id), "user_id": str(user_id)})
+            connection.execute(text("""
+                INSERT INTO memberships (tenant_id, user_id, role)
+                VALUES (:tenant_id, :user_id, 'viewer')
+            """), {"tenant_id": str(tenant_a), "user_id": str(other_user_id)})
+            connection.execute(text("""
+                INSERT INTO documents (id, tenant_id, title, owner_id)
+                VALUES (:id, :tenant_id, '僅建立者可讀', :owner_id)
+            """), {"id": str(private_document), "tenant_id": str(tenant_a),
+                   "owner_id": str(user_id)})
+            connection.execute(text("""
+                INSERT INTO document_user_acl (tenant_id, document_id, user_id)
+                VALUES (:tenant_id, :document_id, :user_id)
+            """), {"tenant_id": str(tenant_a), "document_id": str(private_document),
+                   "user_id": str(user_id)})
             for tenant_id, document_id in ((tenant_a, document_a), (tenant_b, document_b)):
                 connection.execute(text("""
                     INSERT INTO documents (id, tenant_id, title, owner_id)
@@ -83,6 +104,21 @@ def test_document_metadata_requires_membership_and_matching_acl(monkeypatch):
             assert datetime.fromisoformat(metadata["created_at"]).tzinfo is not None
             assert client.get(path_b, headers=headers).status_code == 404
             assert client.get(path_a).status_code == 401
+            private_path = f"/api/v1/documents/{private_document}"
+            assert client.get(private_path, headers=headers).status_code == 200
+            assert str(private_document) in {
+                item["id"] for item in client.get("/api/v1/documents", headers=headers).json()["items"]
+            }
+            other_login = client.post("/api/v1/auth/login", json={
+                "email": other_email, "password": "synthetic-password-123",
+            })
+            assert other_login.status_code == 200
+            other_headers = {"Authorization": f"Bearer {other_login.json()['access_token']}",
+                             "X-Tenant-ID": str(tenant_a)}
+            assert client.get(private_path, headers=other_headers).status_code == 404
+            assert str(private_document) not in {
+                item["id"] for item in client.get("/api/v1/documents", headers=other_headers).json()["items"]
+            }
 
             connection.execute(text("""
                 UPDATE memberships SET role = 'staff'
@@ -107,6 +143,16 @@ def test_document_metadata_requires_membership_and_matching_acl(monkeypatch):
                 DELETE FROM memberships WHERE tenant_id = :tenant_id AND user_id = :user_id
             """), {"tenant_id": str(tenant_b), "user_id": str(user_id)})
             assert client.get(path_b, headers=headers).status_code == 404
+            connection.execute(text("""
+                DELETE FROM memberships WHERE tenant_id = :tenant_id AND user_id = :user_id
+            """), {"tenant_id": str(tenant_a), "user_id": str(user_id)})
+            assert connection.execute(text("""
+                SELECT count(*) FROM document_user_acl
+                WHERE tenant_id = :tenant_id AND document_id = :document_id
+            """), {"tenant_id": str(tenant_a),
+                   "document_id": str(private_document)}).scalar_one() == 0
+            headers["X-Tenant-ID"] = str(tenant_a)
+            assert client.get(private_path, headers=headers).status_code == 404
         finally:
             app.dependency_overrides.clear()
             outer.rollback()

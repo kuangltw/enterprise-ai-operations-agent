@@ -36,11 +36,18 @@ def list_documents(
     query = """
         SELECT d.id, d.tenant_id, d.title, d.current_version, d.created_at
         FROM documents AS d
-        JOIN document_acl AS acl
-          ON acl.tenant_id = d.tenant_id AND acl.document_id = d.id
-        WHERE d.tenant_id = :tenant_id AND d.status = 'active' AND acl.role = :role
+        WHERE d.tenant_id = :tenant_id AND d.status = 'active'
+          AND (
+            EXISTS (SELECT 1 FROM document_acl AS acl
+                    WHERE acl.tenant_id = d.tenant_id AND acl.document_id = d.id
+                      AND acl.role = :role)
+            OR EXISTS (SELECT 1 FROM document_user_acl AS ua
+                       WHERE ua.tenant_id = d.tenant_id AND ua.document_id = d.id
+                         AND ua.user_id = :user_id)
+          )
     """
-    parameters = {"tenant_id": str(context.tenant_id), "role": context.role}
+    parameters = {"tenant_id": str(context.tenant_id), "role": context.role,
+                  "user_id": str(context.user_id)}
     if cursor is not None:
         query += " AND d.id > :cursor"
         parameters["cursor"] = str(cursor)
@@ -58,12 +65,18 @@ def get_document_metadata(
     row = db.execute(text("""
         SELECT d.id, d.tenant_id, d.title, d.current_version, d.created_at
         FROM documents AS d
-        JOIN document_acl AS acl
-          ON acl.tenant_id = d.tenant_id AND acl.document_id = d.id
         WHERE d.tenant_id = :tenant_id AND d.id = :document_id
-          AND d.status = 'active' AND acl.role = :role
+          AND d.status = 'active'
+          AND (
+            EXISTS (SELECT 1 FROM document_acl AS acl
+                    WHERE acl.tenant_id = d.tenant_id AND acl.document_id = d.id
+                      AND acl.role = :role)
+            OR EXISTS (SELECT 1 FROM document_user_acl AS ua
+                       WHERE ua.tenant_id = d.tenant_id AND ua.document_id = d.id
+                         AND ua.user_id = :user_id)
+          )
     """), {"tenant_id": str(context.tenant_id), "document_id": str(document_id),
-           "role": context.role}).mappings().first()
+           "role": context.role, "user_id": str(context.user_id)}).mappings().first()
     if row is None:
         raise AuthError(404, "DOCUMENT_NOT_FOUND", "文件不存在或無法存取")
     return DocumentMetadata.model_validate(row)

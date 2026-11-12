@@ -1,6 +1,6 @@
 # Security Model（安全模型）v0.1
 
-> **安全設計基準，尚未通過完整安全稽核。** M1 已[有條件驗收通過](../testing/ACCEPTANCE.md)，歷史登出 500 的根因仍未確認。M2 已實作文件單筆與列表中繼資料讀取時的 Tenant Membership 與 ACL 檢查；文件上傳、檢索與 ERP 實際執行點授權仍待實作及驗收。
+> **安全設計基準，尚未通過完整安全稽核。** M1 已[有條件驗收通過](../testing/ACCEPTANCE.md)，歷史登出 500 的根因仍未確認。M2 已實作文件單筆與列表中繼資料讀取時的 Tenant Membership、角色 ACL 及指定使用者 ACL 檢查；文件上傳、檢索與 ERP 實際執行點授權仍待實作及驗收。
 
 ## 1. Trust Boundary（信任邊界）
 
