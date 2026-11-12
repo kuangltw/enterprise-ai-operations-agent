@@ -85,6 +85,15 @@ def test_missing_token_is_rejected(auth_client):
     assert client.get("/api/v1/auth/me").status_code == 401
 
 
+def test_validation_error_uses_public_error_contract(auth_client):
+    client, _ = auth_client
+    response = client.post("/api/v1/auth/login", json={"email": "", "password": ""})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+    assert response.json()["error"]["details"] == {}
+    assert "input" not in response.text
+
+
 def test_openapi_contains_auth_contract():
     paths = app.openapi()["paths"]
     assert "post" in paths["/api/v1/auth/login"]

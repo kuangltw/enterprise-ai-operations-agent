@@ -36,7 +36,7 @@
 | GET | `/auth/me` | 驗證 JWT、使用者狀態與未撤銷 Session，回傳使用者 ID 及 Email |
 | POST | `/auth/logout` | 撤銷目前 Session，回傳 204 |
 
-登入請求：`{"email":"user@example.invalid","password":"<password>"}`。成功回應包含 `access_token`、`token_type`（`Bearer`）及 UTC `expires_at`。JWT 的 `sub` 為 User ID、`jti` 為 Session ID；每次存取受保護端點必須重新檢查資料庫狀態。登入與身分驗證錯誤回傳上述 `error` 格式；422 請求結構錯誤仍使用 FastAPI 預設格式，待 M1-05 統一。尚未提供 Refresh Token（更新憑證）、公開註冊或租戶選擇 API。
+登入請求：`{"email":"user@example.invalid","password":"<password>"}`。成功回應包含 `access_token`、`token_type`（`Bearer`）及 UTC `expires_at`。JWT 的 `sub` 為 User ID、`jti` 為 Session ID；每次存取受保護端點必須重新檢查資料庫狀態。登入與身分驗證錯誤回傳上述 `error` 格式；422 請求結構錯誤使用 `VALIDATION_ERROR`，不回傳使用者輸入原文。尚未提供 Refresh Token（更新憑證）或公開註冊 API。
 
 登入嘗試以 Redis 對來源 IP 設定每 60 秒 10 次、對帳號設每 300 秒 5 次限制，超過回傳 429；Redis 無法使用時回傳 503。帳號識別以 HMAC 處理，不將 Email 原文寫入 Redis Key。伺服器只使用連線來源位址，不採信未受控的代理轉送 Header。
 
