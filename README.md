@@ -59,6 +59,12 @@ flowchart TD
 5. **M5**：監控、安全與故障恢復測試。
 6. **M6**：公開 Demo、文件與 Release（發布）。
 
+## M1 基礎骨架（已提交原始碼，尚待執行驗證）
+
+已加入 React + TypeScript 前端、FastAPI 健康檢查、ASP.NET Core Demo ERP 健康檢查、兩套 PostgreSQL 資料庫、Alembic / EF Core 初始 Migration、Docker Compose 與 CI 建置設定。
+
+啟動方式與已知限制請見 [M1 開發環境指南](docs/development/GETTING_STARTED.md)。本機完成 `docker compose up --build -d` 並通過健康檢查前，不宣稱環境已通過部署測試。
+
 ## 專案狀態與使用限制
 
 - 目前只有設計文件；尚未提供 `docker compose up` 可啟動的完整環境。
