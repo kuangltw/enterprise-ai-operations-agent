@@ -1,8 +1,8 @@
-# LangGraph Workflow Design v0.1
+# LangGraph Agent Workflow（代理程式工作流程）v0.1
 
-> Proposed graph design; no graph implementation yet. Graph state is orchestration state, **not** authoritative financial transaction state.
+> **設計階段，尚未實作。** LangGraph State 用於編排流程，不是採購交易的授權或唯一狀態來源。
 
-## State contract
+## 1. State（狀態結構）
 
 ```python
 from typing import TypedDict, NotRequired
@@ -26,83 +26,85 @@ class AgentState(TypedDict):
     retry_count: NotRequired[int]
 ```
 
-The backend injects trusted `tenant_id`/`user_id` from authenticated context. Large content and sensitive ERP outputs stay in protected storage; state carries references and bounded summaries. Use explicit message reducer and history limits for multi-turn conversation.
+`tenant_id` 與 `user_id` 必須由驗證後端注入，模型不得修改。大型文件與完整 ERP 結果保存在受控儲存層，State 只保留識別碼與必要摘要。多輪對話應增加 Messages Reducer（訊息合併器）及歷程限制。
 
-## Nodes
+## 2. Node（節點）規格
 
-| Node | Responsibility | Deterministic / model |
+| Node | 責任 | 執行性質 |
 |---|---|---|
-| authorize_request | Validate actor/tenant/warehouse/tool permissions | deterministic |
-| classify_intent | Route SOP, sales, purchase, unsupported | LLM with schema validation |
-| retrieve_knowledge | ACL-filtered retrieval and evidence references | retrieval service |
-| query_erp | Authorized, bounded read-only ERP calls | tool adapters |
-| analyze_business | Reorder point, inventory position, lead time, MOQ | deterministic |
-| generate_answer | Explain results grounded in references | LLM |
-| create_purchase_draft | Persist versioned recommendation | DB transaction |
-| request_approval | Freeze draft and create approval | DB transaction |
-| wait_for_approval | Pause until trusted decision | interrupt |
-| validate_before_execute | Re-read scope, inventory/policy/prices/version | deterministic |
-| execute_purchase | Dispatch idempotent write, reconcile | guarded worker |
-| finalize_run | Persist terminal result/status | deterministic |
-| handle_failure | Classify, log, retry boundedly or terminate | deterministic |
+| `authorize_request` | 驗證人員、租戶、倉庫、工具權限 | 確定性 |
+| `classify_intent` | SOP／銷售／採購／不支援意圖分類 | LLM + Schema 驗證 |
+| `retrieve_knowledge` | 套 ACL 檢索及產生引用識別碼 | RAG |
+| `query_erp` | 呼叫受控 C# Demo ERP Read API | Tool Adapter |
+| `analyze_business` | 計算補貨點、庫存部位與 MOQ | 確定性 |
+| `generate_answer` | 根據證據產生說明 | LLM |
+| `create_purchase_draft` | 儲存具版本的採購建議 | DB Transaction |
+| `request_approval` | 鎖定草稿並建立審核 | DB Transaction |
+| `wait_for_approval` | 暫停並等待核准 | Interrupt |
+| `validate_before_execute` | 重驗庫存、價格、政策、版本與權限 | 確定性 |
+| `execute_purchase` | Outbox 發送受控 C# ERP Write API | Worker |
+| `finalize_run` | 記錄結果及結束狀態 | 確定性 |
+| `handle_failure` | 分類錯誤、有限重試與稽核 | 確定性 |
 
-## Routing
+## 3. 路由
 
 ```mermaid
 flowchart TD
- A[authorize_request] --> B[classify_intent]
- B -->|sop| R[retrieve_knowledge]
- R --> G[generate_answer]
- B -->|sales| E[query_erp]
- E --> N[analyze_business]
+ A["authorize_request（驗證）"] --> B["classify_intent（分類）"]
+ B -->|SOP| R["retrieve_knowledge（文件檢索）"]
+ R --> G["generate_answer（產生答案）"]
+ B -->|分析| E["query_erp（查詢 ERP）"]
+ E --> N["analyze_business（確定性分析）"]
  N --> G
- B -->|purchase| P[retrieve_knowledge + query_erp]
- P --> N2[analyze_business]
- N2 --> D[create_purchase_draft]
- D --> Q[request_approval]
- Q --> W[wait_for_approval]
- W -->|reject| F[finalize_run]
- W -->|approve| V[validate_before_execute]
- V -->|stale/invalid| F
- V -->|valid| X[execute_purchase]
+ B -->|採購| P["retrieve_knowledge + query_erp"]
+ P --> N2["analyze_business"]
+ N2 --> D["create_purchase_draft"]
+ D --> Q["request_approval"]
+ Q --> W["wait_for_approval"]
+ W -->|駁回| F["finalize_run"]
+ W -->|核准| V["validate_before_execute"]
+ V -->|版本失效| F
+ V -->|有效| X["execute_purchase"]
  X --> F
  G --> F
- B -->|unsupported| U[generate_safe_response]
+ B -->|其他| U["generate_safe_response"]
  U --> F
 ```
 
-Any node can route to `handle_failure`. Independent evidence and ERP reads may execute concurrently after passing authorization; never permit stale ACL results in the response.
+所有 Node 必須有 Failure Route（失敗路由）。授權後可平行檢索 SOP 與 ERP Read API，但回覆前需再次檢查引用的文件權限。
 
-## Approval security and resumption
+## 4. Human-in-the-loop（人工介入）與恢復
 
-1. Graph creates a draft and approval record **before** entering an interrupting node. Side effects are idempotent and outside any repeatable interrupt code.
-2. User POSTs decision to Approval API. API validates active membership, authority, version, warehouse scope and self-approval policy.
-3. In one DB transaction: lock records; update approval status; append audit event and outbox event.
-4. Worker resumes the graph with the same checkpoint thread ID; resume payload contains only trusted `approval_id`/decision reference. **Reload DB record** to determine actual decision.
-5. On approved decision: revalidate current ERP state and compute purchase restrictions. If changed, mark stale and demand fresh approval.
-6. ERP write uses stable idempotency key; reconcile unknown outcomes and persist external document ID.
+1. `create_purchase_draft` 與 `request_approval` 在暫停前完成，使用可重入、冪等的持久化操作。
+2. 人員透過 Approval API 提交決策，API 檢查租戶、角色、倉庫、版本及 Self-approval（自行核准）限制。
+3. 同一 DB Transaction 內更新 Approval，寫入 Audit 與 Outbox。
+4. Worker 使用原本 Checkpoint `thread_id` 恢復 Graph；Resume Payload 只帶可信任的 Approval ID。
+5. Resume 後重新查詢資料庫決策，不接受外部直接傳入 `approved: true` 進行授權。
+6. 核准後重新查詢 C# Demo ERP 庫存／價格與政策；資料異動時標為 `stale`，重新送審。
+7. 交易執行使用固定冪等鍵，Timeout 時先查詢 ERP 對帳介面。
 
-LangGraph `interrupt()` can re-enter a node when resumed; repeating side effects must therefore be moved to separate idempotent nodes or protected with persistent uniqueness constraints. Never trust an arbitrary `{"approved":true}` resume payload.
+LangGraph `interrupt()` 恢復時可能重新執行 Node 開頭，必須將不應重複執行的 Side Effect（副作用）移至其他節點，或使用資料庫唯一約束保護。
 
-## Deterministic inventory formula (baseline)
+## 5. 確定性庫存計算
 
-- `ADS = 30-day fulfilled demand / 30` (document stockout bias)
-- `ROP = ADS × lead_time_days + safety_stock`
-- `IP = on_hand + open_incoming - outstanding_committed_demand`
-- Trigger if `IP <= ROP`.
-- `Q = max(0, target_stock - IP)`; round up to pack multiple and MOQ.
-- Validate units, source versions, lead time and price; use Decimal arithmetic.
+- `ADS = 最近 30 日有效銷售量 / 30`（需標註缺貨造成的銷售偏差）。
+- `ROP = ADS * lead_time_days + safety_stock`。
+- `IP = on_hand + open_incoming - outstanding_committed_demand`。
+- `IP <= ROP` 時考慮補貨。
+- `Q = max(0, target_stock - IP)`，再依 MOQ（最低訂購量）及 Pack Size（包裝倍數）進位。
 
-Example: `on_hand=120, committed=35, incoming=40 → IP=125`, `ADS=10, lead time=7, safety stock=30 → ROP=100`, thus no reorder. Avoid counting the same reserved amount twice as backorders.
+範例：`on_hand=120, committed=35, incoming=40`，得到 `IP=125`；`ADS=10, lead_time=7, safety_stock=30`，得到 `ROP=100`，因此目前不需補貨。不能同時將同一筆保留量重複當作 Backorder（欠交需求）扣除。
 
-## Reliability
+計算須使用 Python `Decimal` 與 C# `decimal`，並保存 ERP 來源版本、計算參數與依據。
 
-- One worker ownership/lease per active run; terminal transitions are guarded.
-- Explicit run states: queued → running → waiting_approval → running → completed/failed/cancelled.
-- Checkpoint store in PostgreSQL plus an independent purchase DB state machine.
-- External writes are at-least-once dispatch with idempotent ERP effect (not blanket exactly-once transport).
-- Handle retry budget, timeout, fallback safe response, and reconciliation of `unknown` ERP results.
-- Cancellation does not undo committed external operations.
-- Emit trace ID and sanitized `agent_run_events` per node transition.
+## 6. Run State（執行狀態）與可復原性
 
-See [schema](../database/SCHEMA.md), [API contract](../api/CONTRACT.md), and [acceptance criteria](../testing/ACCEPTANCE.md).
+`queued → running → waiting_approval → running → completed / failed / cancelled`。
+
+- 每個 Run 由單一 Worker Lease（租約）控制執行權。
+- Checkpoint 採 PostgreSQL 官方實作；採購交易採獨立資料庫狀態機。
+- Outbox 允許 At-least-once Delivery（至少一次傳遞），ERP 使用 Idempotency 確保單一業務效果。
+- 每次 Node 轉移應記錄 Trace ID、時間、狀態與遮蔽敏感內容的事件。
+- 取消執行不能回滾已完成的 ERP 採購寫入。
+
+相關文件：[Schema](../database/SCHEMA.md) · [API](../api/CONTRACT.md) · [驗收規格](../testing/ACCEPTANCE.md)。
