@@ -84,6 +84,27 @@ jobs:
         working-directory: apps/web
         run: npm run build
 
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [python, frontend]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 安裝前端測試套件
+        working-directory: apps/web
+        run: npm ci --no-audit --no-fund
+      - name: 安裝 Headless Chromium 與系統依賴
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+      - name: 執行隔離的登入與跨租戶 E2E
+        run: python scripts/testing/run_m1_e2e.py
+
   compose:
     runs-on: ubuntu-latest
     steps:
