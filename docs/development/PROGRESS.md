@@ -6,15 +6,25 @@
 |---|---|---|
 | M1-01 環境驗證 | 本機已完成 | [驗證紀錄](M1-01-VERIFICATION.md) |
 | 本機 Git 機密防護 | 本機已完成 | 2026-11-12 隔離 Repository 提交測試 6 項通過；安全修正 `141ffae9f35f91ecde0e16060ac10d9447d186f0` |
-| M1-02 身分驗證與租戶管理 | 待開始 | 尚未實作 |
+| M1-02 身分驗證與租戶管理 | 進行中 | 密碼雜湊基礎已實作；JWT、Session、租戶 API 尚未實作 |
 | M1-03 RBAC 與租戶隔離 | 待開始 | 尚未實作 |
 | M1-04 React 登入與管理介面 | 待開始 | 尚未實作 |
 | M1-05 CI 與整合驗收 | 待開始 | 尚未實作 |
 
 ## 下一個任務
 
-1. 啟動 [Codex Desktop 自主開發循環](AUTONOMOUS_LOOP.md)，先執行 M1-02。
+1. 繼續 M1-02，先完成身分驗證所需的下一項最小工作。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-12 M1-02 自主開發循環
+
+- 啟動核對：M1-01 的四筆提交依序為 `736e665`、`30d079b`、`e01f8a8`、`308b81a`，與本機驗證紀錄一致；既有進度檔已存在，本輪更新其交接狀態。
+- 首項工作：新增 `apps/api/src/passwords.py` 與 `apps/api/tests/test_passwords.py`。使用 scrypt、每筆隨機鹽值、定長參數與常數時間比較；不接受異常雜湊參數。
+- 測試：WSL `python3 -m pytest -p no:cacheprovider -q tests/test_passwords.py` 為 3 passed；Docker API 映像以合成資料庫連線設定執行全部 API 測試為 6 passed、1 個既有棄用警告。第一次 WSL 全套測試因環境未安裝 FastAPI 無法收集，已改於 Docker 完成回歸測試。
+- 審查與機密掃描：暫存區僅含上述兩個新檔；`git diff --cached --check` 通過，Gitleaks 8.30.1 掃描 2 個暫存檔未發現機密；未新增依賴套件。
+- 功能提交：`d0d8a910ffcc7482c1953778ae26abca2fd42ba1`。尚無登入、JWT 或 Session API，M1-02 未完成。
+- Git 注意事項：啟動時 51 個既有追蹤檔呈現 CRLF 換行差異；`git diff --ignore-space-at-eol` 無內容差異。本輪僅暫存明確的新檔，不納入其餘換行差異。
+- 額度：官方 Codex 使用量工具回報本輪首項完成後 5 小時剩餘 67%、每週剩餘 94%，尚未觸發 15% 停止門檻。
 
 ## 2026-11-12 本機 Git 機密防護驗證
 
