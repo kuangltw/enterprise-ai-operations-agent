@@ -25,6 +25,9 @@
 - M1-05 第四項：新增 `apps/web/package-lock.json`，Docker 與 GitHub Actions 前端建置改用 `npm ci`；CI 加入 `npm audit --audit-level=high`。提交 `0fce7fd`（`ci: 鎖定前端相依版本並執行漏洞稽核`）。
 - 驗證：本機 `npm audit --prefix apps/web --audit-level=high` 回報 0 個漏洞；`docker compose build web` 中 `npm ci`、TypeScript、Vite 均成功；`docker compose config --quiet` 通過。`git diff --cached --check` 與 Gitleaks 暫存區 3 個檔案掃描均通過，提交 Hook 再掃描通過。嘗試 Python `pip_audit` 時本機尚未安裝該工具，待下項補做；新增的前端間接依賴已納入 npm audit。提交後官方額度為 5 小時剩餘 85%、每週剩餘 68%。
 - 下一項：執行 Python 依賴稽核、Compose Migration 與完整回歸；M1-04 瀏覽器互動及遠端 GitHub Actions 仍待可用工具或人工 Push。
+- M1-05 第五項：在暫時性 API 容器安裝 `pip-audit` 並解析 `requirements-dev.txt`，結果 `No known vulnerabilities found`。重跑本機 Alembic Migration 成功；`docker compose build demo-erp` 成功，`docker compose up -d` 啟動完整服務且 API、Demo ERP、資料庫與 Redis 健康。本機 Web 首頁 200、經 Web 代理的未登入 `/api/v1/auth/me` 401、API `/health/ready` 200。
+- 安全回歸：第一次執行提交前安全測試因目前終端 PATH 缺少 Gitleaks 而失敗；以已安裝的 Gitleaks 路徑重新執行 `python -m unittest discover -s tests/security -p test_*.py -v`，6 項通過。此為環境設定問題，未修改或放寬測試。API 全套 PostgreSQL／Redis 回歸在第三項工作已執行，39 passed、1 skipped；遠端 GitHub Actions 仍未執行。此次僅更新驗收紀錄，未改動依賴或業務程式。
+- 剩餘：M1-04 實際瀏覽器登入／租戶選擇互動，乾淨資料庫首次初始化、遠端 CI。不得為驗證乾淨資料庫刪除現有 Docker Volume；本機現有資料庫的空白初始化案例維持跳過。
 
 - 官方 Codex 額度恢復後續作：開始時 5 小時剩餘 100%、每週剩餘 84%；工作區 Git 狀態乾淨。一次性 Thread Automation `m1` 已在喚醒後刪除，避免重複執行。
 - 第十二項工作：新增 `apps/api/src/create_tenant.py` 及 PostgreSQL 整合測試；資料庫操作員可指定既有啟用 User 作為新租戶首位 admin，租戶與 Membership 在同筆交易寫入。同步 API 契約及啟動文件。未提供租戶 admin 可呼叫的全域建立租戶 API，避免任意擴張租戶。
