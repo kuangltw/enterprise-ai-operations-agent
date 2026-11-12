@@ -10,7 +10,7 @@ from minio.error import S3Error
 
 from src.object_storage import (
     MAX_PDF_BYTES, InvalidObjectKey, InvalidPdf, PdfTooLarge,
-    reserve_pdf_key, store_pdf,
+    StoredPdfMismatch, reserve_pdf_key, store_pdf, verify_stored_pdf,
 )
 
 pytestmark = pytest.mark.skipif(
@@ -38,6 +38,14 @@ def test_store_pdf_uses_generated_key_and_enforces_size():
     assert stored.key.endswith(".pdf")
     assert stored.size == len(payload)
     assert len(stored.sha256) == 64
+    assert verify_stored_pdf(client, bucket, tenant_id, document_id, version_id,
+                             stored.key, stored.sha256, stored.size)
+    with pytest.raises(StoredPdfMismatch):
+        verify_stored_pdf(client, bucket, tenant_id, document_id, version_id,
+                          stored.key, "0" * 64, stored.size)
+    with pytest.raises(InvalidObjectKey):
+        verify_stored_pdf(client, bucket, tenant_id, document_id, uuid4(),
+                          stored.key, stored.sha256, stored.size)
     response = client.get_object(bucket_name=bucket, object_name=stored.key)
     try:
         assert response.read() == payload
@@ -65,3 +73,5 @@ def test_store_pdf_uses_generated_key_and_enforces_size():
     with pytest.raises(S3Error) as error:
         client.stat_object(bucket_name=bucket, object_name=stored.key)
     assert error.value.code == "NoSuchKey"
+    assert not verify_stored_pdf(client, bucket, tenant_id, document_id, version_id,
+                                 stored.key, stored.sha256, stored.size)

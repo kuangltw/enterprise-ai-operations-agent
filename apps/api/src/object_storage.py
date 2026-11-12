@@ -7,6 +7,7 @@ from typing import BinaryIO
 from uuid import UUID, uuid4
 
 from minio import Minio
+from minio.error import S3Error
 
 MAX_PDF_BYTES = 10 * 1024 * 1024
 _READ_BYTES = 64 * 1024
@@ -24,6 +25,10 @@ class InvalidObjectKey(ValueError):
     """預留的物件鍵與文件版本不符。"""
 
 
+class StoredPdfMismatch(ValueError):
+    """既有物件與預期的 PDF 摘要或大小不同。"""
+
+
 @dataclass(frozen=True)
 class StoredPdf:
     key: str
@@ -34,6 +39,42 @@ class StoredPdf:
 def reserve_pdf_key(tenant_id: UUID, document_id: UUID, version_id: UUID) -> str:
     """在資料庫交易前產生不含使用者檔名的版本物件鍵。"""
     return f"{tenant_id}/{document_id}/{version_id}/{uuid4()}.pdf"
+
+
+def _validate_key(key: str, tenant_id: UUID, document_id: UUID,
+                  version_id: UUID) -> None:
+    prefix = f"{tenant_id}/{document_id}/{version_id}/"
+    if (not key.startswith(prefix) or len(key) != len(prefix) + 40
+            or not key.endswith(".pdf")):
+        raise InvalidObjectKey("物件鍵與文件版本不符")
+    try:
+        if str(UUID(key[len(prefix):-4])) != key[len(prefix):-4]:
+            raise ValueError("非標準 UUID")
+    except ValueError as exc:
+        raise InvalidObjectKey("物件鍵格式不正確") from exc
+
+
+def verify_stored_pdf(client: Minio, bucket: str, tenant_id: UUID,
+                      document_id: UUID, version_id: UUID, key: str,
+                      expected_sha256: str, expected_size: int) -> bool:
+    """寫入結果不明時讀回物件核對；不存在回 False，內容不符則拒絕。"""
+    _validate_key(key, tenant_id, document_id, version_id)
+    if expected_size < 0 or expected_size > MAX_PDF_BYTES:
+        raise ValueError("預期大小超出 PDF 限制")
+    try:
+        response = client.get_object(bucket_name=bucket, object_name=key)
+    except S3Error as exc:
+        if exc.code == "NoSuchKey":
+            return False
+        raise
+    try:
+        data = response.read(expected_size + 1)
+        if len(data) != expected_size or sha256(data).hexdigest() != expected_sha256:
+            raise StoredPdfMismatch("物件內容與預期不符")
+        return True
+    finally:
+        response.close()
+        response.release_conn()
 
 
 def store_pdf(
@@ -49,15 +90,7 @@ def store_pdf(
     """讀取最多 10 MiB，使用預留或新產生的物件鍵寫入既有私有 Bucket。"""
     key = (reserve_pdf_key(tenant_id, document_id, version_id)
            if reserved_key is None else reserved_key)
-    prefix = f"{tenant_id}/{document_id}/{version_id}/"
-    if (not key.startswith(prefix) or len(key) != len(prefix) + 40
-            or not key.endswith(".pdf")):
-        raise InvalidObjectKey("物件鍵與文件版本不符")
-    try:
-        if str(UUID(key[len(prefix):-4])) != key[len(prefix):-4]:
-            raise ValueError("非標準 UUID")
-    except ValueError as exc:
-        raise InvalidObjectKey("物件鍵格式不正確") from exc
+    _validate_key(key, tenant_id, document_id, version_id)
     data = bytearray()
     while chunk := stream.read(min(_READ_BYTES, MAX_PDF_BYTES + 1 - len(data))):
         data.extend(chunk)
