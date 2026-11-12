@@ -35,6 +35,11 @@ def test_scope_requires_same_tenant_membership_and_cascades_on_revoke():
                 connection.execute(text("""
                     INSERT INTO tenants (id, name) VALUES (:id, '合成倉庫租戶')
                 """), {"id": str(tenant_id)})
+            for tenant_id, code in ((tenant_a, "WH-A"), (tenant_b, "WH-B")):
+                connection.execute(text("""
+                    INSERT INTO tenant_warehouses (tenant_id, warehouse_code)
+                    VALUES (:tenant_id, :code)
+                """), {"tenant_id": str(tenant_id), "code": code})
             connection.execute(text("""
                 INSERT INTO memberships (tenant_id, user_id, role)
                 VALUES (:tenant_id, :user_id, 'staff')
@@ -47,6 +52,13 @@ def test_scope_requires_same_tenant_membership_and_cascades_on_revoke():
                         (tenant_id, user_id, warehouse_code)
                         VALUES (:tenant_id, :user_id, 'WH-B')
                     """), {"tenant_id": str(tenant_b), "user_id": str(user_id)})
+            with pytest.raises(IntegrityError):
+                with connection.begin_nested():
+                    connection.execute(text("""
+                        INSERT INTO membership_warehouse_scopes
+                        (tenant_id, user_id, warehouse_code)
+                        VALUES (:tenant_id, :user_id, 'WH-B')
+                    """), {"tenant_id": str(tenant_a), "user_id": str(user_id)})
             connection.execute(text("""
                 INSERT INTO membership_warehouse_scopes
                 (tenant_id, user_id, warehouse_code)
@@ -82,6 +94,10 @@ def test_warehouse_scope_api_uses_selected_tenant_and_membership(monkeypatch):
                     INSERT INTO memberships (tenant_id, user_id, role)
                     VALUES (:tenant_id, :user_id, 'viewer')
                 """), {"tenant_id": str(tenant_id), "user_id": str(user_id)})
+                connection.execute(text("""
+                    INSERT INTO tenant_warehouses (tenant_id, warehouse_code)
+                    VALUES (:tenant_id, :warehouse_code)
+                """), {"tenant_id": str(tenant_id), "warehouse_code": warehouse_code})
                 connection.execute(text("""
                     INSERT INTO membership_warehouse_scopes
                     (tenant_id, user_id, warehouse_code)

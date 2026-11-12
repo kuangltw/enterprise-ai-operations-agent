@@ -80,10 +80,22 @@ CREATE TABLE membership_warehouse_scopes (
   PRIMARY KEY (tenant_id, user_id, warehouse_code),
   FOREIGN KEY (tenant_id, user_id) REFERENCES memberships(tenant_id, user_id) ON DELETE CASCADE
 );
+
+CREATE TABLE tenant_warehouses (
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  warehouse_code varchar(80) NOT NULL CHECK (length(trim(warehouse_code)) > 0),
+  PRIMARY KEY (tenant_id, warehouse_code),
+  UNIQUE (warehouse_code)
+);
+
+ALTER TABLE membership_warehouse_scopes ADD CONSTRAINT fk_scope_tenant_warehouse
+  FOREIGN KEY (tenant_id, warehouse_code)
+  REFERENCES tenant_warehouses(tenant_id, warehouse_code);
 ```
 
 `sessions.id` 作為 JWT 的 `jti`，每次受保護請求須檢查工作階段未撤銷且未過期。建帳時 Email 轉為小寫並去除前後空白，資料庫另以 `ux_users_email_lower` 阻止大小寫重複；停權與權限變更稽核仍待實作。
 `membership_warehouse_scopes` 由 `0004_warehouse_scopes` Migration 建立；每個倉庫需明確授權，沒有資料列即沒有倉庫權限，不以 admin 角色自動推定全部倉庫。`warehouse_code` 對應 ERP 倉庫代碼；ERP 位於獨立資料庫，無法建立跨資料庫 Foreign Key（外鍵），讀取 ERP 前仍須驗證代碼存在及租戶歸屬。
+`tenant_warehouses` 由 `0005_tenant_warehouses` Migration 建立；倉庫代碼只能登錄至單一租戶，授權範圍的複合外鍵禁止指向其他租戶的倉庫。登錄流程及 ERP 端歸屬驗證仍待後續實作，不能只根據此表對 ERP 進行跨租戶讀取。
 
 ## 4. Knowledge（文件與索引）
 
