@@ -59,6 +59,7 @@ docker compose down -v
 - 目前提供健康檢查、登入、目前使用者、登出及本人可存取的租戶讀取端點；租戶 admin 可建立新 User 與非 admin Membership，並變更或撤銷這些成員的角色與資格。使用前須在本機 `.env` 設定至少 32 bytes 的隨機 `JWT_SIGNING_KEY`。未設定或仍為 `change-` 範例值時，登入會回傳 503。首次建立管理員與租戶可在空白資料庫執行 `docker compose run --rm api python -m src.bootstrap_identity`，依終端機提示輸入 Email、租戶名稱與密碼；密碼不應放在指令參數。資料庫已有 User 或 Tenant 時此指令會拒絕重做。公開註冊、完整 RBAC（角色式存取控制）及新 Tenant 寫入 API 仍未實作。
 - 全域 User 停權僅供有 Agent 資料庫操作權限者執行：`docker compose run --rm api python -m src.disable_user`。依提示輸入 Email 並確認；指令會在同筆交易停權 User 及撤銷其所有 Session。租戶 admin API 僅能撤銷其租戶 Membership，無法停用全域帳號。執行前應依組織的操作程序核對身分與影響範圍。
 - 新租戶僅供有 Agent 資料庫操作權限者建立：`docker compose run --rm api python -m src.create_tenant`。依提示輸入租戶名稱、**既有且啟用**的管理員 User Email，再輸入 `CREATE` 確認。租戶與首位 admin Membership 在同筆交易建立；不接受停權帳號。租戶 admin 無權透過 API 自行建立新租戶。
+- 登錄倉庫代碼僅供資料庫操作員執行：`docker compose run --rm api python -m src.register_warehouse`。操作員須先在 ERP 核對倉庫代碼及實際租戶歸屬，再輸入啟用租戶 ID、代碼及 `REGISTER` 確認。資料庫會拒絕同一代碼登錄至其他租戶；此指令本身無法跨資料庫驗證 ERP 資料，禁止把未核實的代碼當成已授權倉庫。
 - C# ERP 只有商品、倉庫與庫存初始資料模型，尚未實作銷售、採購、實際業務工具 API。
 - EF Core 的啟動自動 Migration 只用於本機 Demo；正式環境改以專用部署 Job 執行。
 - React 前端目前僅有靜態 M1 首頁，尚未接入 API 或登入流程。
