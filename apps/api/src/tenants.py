@@ -14,6 +14,7 @@ from .identity_input import normalize_email, validate_new_password
 from .passwords import hash_password
 from .role_policy import allows, require_permission
 from .tenant_context import TenantContext
+from .warehouse_scope import list_warehouse_codes, require_warehouse_code
 
 router = APIRouter(prefix="/api/v1/tenants", tags=["租戶"])
 
@@ -27,6 +28,11 @@ class TenantItem(BaseModel):
 class TenantList(BaseModel):
     items: list[TenantItem]
     next_cursor: UUID | None
+
+
+class WarehouseScopeList(BaseModel):
+    items: list[str]
+    next_cursor: str | None = None
 
 
 class CreateMemberRequest(BaseModel):
@@ -102,6 +108,25 @@ def get_current_tenant(
     context: TenantContext = Depends(require_permission("tenant.read")),
 ) -> TenantItem:
     return TenantItem(id=context.tenant_id, name=context.name, role=context.role)
+
+
+@router.get("/current/warehouse-scopes", response_model=WarehouseScopeList)
+def get_current_warehouse_scopes(
+    cursor: str | None = None,
+    context: TenantContext = Depends(require_permission("inventory.read")),
+    db: Session = Depends(get_db),
+) -> WarehouseScopeList:
+    items, next_cursor = list_warehouse_codes(context, db, cursor)
+    return WarehouseScopeList(items=items, next_cursor=next_cursor)
+
+
+@router.get("/current/warehouse-scopes/{warehouse_code}")
+def get_current_warehouse_scope(
+    warehouse_code: str,
+    context: TenantContext = Depends(require_permission("inventory.read")),
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    return {"warehouse_code": require_warehouse_code(context, warehouse_code, db)}
 
 
 @router.get("/{tenant_id}", response_model=TenantItem)
