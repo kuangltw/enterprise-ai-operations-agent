@@ -32,6 +32,20 @@ jobs:
       - name: C# 建置
         run: dotnet build apps/demo-erp/EnterpriseDemoErp.csproj -c Release
 
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: 安裝前端套件
+        working-directory: apps/web
+        run: npm install --no-audit --no-fund
+      - name: 前端建置
+        working-directory: apps/web
+        run: npm run build
+
   compose:
     runs-on: ubuntu-latest
     steps:
