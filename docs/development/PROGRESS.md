@@ -6,7 +6,7 @@
 |---|---|---|
 | M1-01 環境驗證 | 本機已完成 | [驗證紀錄](M1-01-VERIFICATION.md) |
 | 本機 Git 機密防護 | 本機已完成 | 2026-11-12 隔離 Repository 提交測試 6 項通過；安全修正 `141ffae9f35f91ecde0e16060ac10d9447d186f0` |
-| M1-02 身分驗證與租戶管理 | 進行中 | 登入、目前使用者與 Session 撤銷已實作；受控建帳、租戶 API、登入速率限制尚未實作 |
+| M1-02 身分驗證與租戶管理 | 進行中 | 登入、Session 撤銷及 Redis 速率限制已實作；受控建帳與租戶 API 尚未實作 |
 | M1-03 RBAC 與租戶隔離 | 待開始 | 尚未實作 |
 | M1-04 React 登入與管理介面 | 待開始 | 尚未實作 |
 | M1-05 CI 與整合驗收 | 待開始 | 尚未實作 |
@@ -36,6 +36,9 @@
 - 測試：`docker compose config --quiet` 與 `docker compose build api` 成功；Docker Compose 連接實際 PostgreSQL 的完整 API 測試為 16 passed、6 個棄用警告。PostgreSQL 整合測試以外層交易回滾合成資料；OpenAPI 路徑契約測試通過。
 - 安全審查：`git diff --cached --check` 通過，Gitleaks 掃描 10 個暫存檔未發現機密。登入尚無 Rate Limit（速率限制），目前 Compose API 僅綁本機 `127.0.0.1`；後續須在擴大暴露前補上限制。尚無受控建帳與租戶 API，M1-02 未完成。
 - 官方額度：第四項完成後 5 小時剩餘 54%、每週剩餘 92%。下一項先補登入速率限制。
+- 第五項工作：登入前以 Redis Lua Script 原子計數，限制來源 IP 每 60 秒 10 次、帳號每 300 秒 5 次；帳號以 HMAC 鍵識別，不儲存 Email 原文。Redis 失效時登入回 503。提交 `14616966181080857b265353a0cfa7f3cd9057bc`。
+- 測試與安全：Compose API 與實際 PostgreSQL、Redis 的完整測試 21 passed、6 個棄用警告；Redis 整合案例驗證第 6 次遭拒及兩類 Key 的 TTL。`docker compose config --quiet` 通過；`pip-audit -r requirements-dev.txt` 未發現已知漏洞；`git diff --cached --check` 通過，Gitleaks 掃描 11 個暫存檔未發現機密。
+- 官方額度：第五項完成後 5 小時剩餘 47%、每週剩餘 91%。下一項為受控建立使用者與租戶。
 
 ## 2026-11-12 本機 Git 機密防護驗證
 
