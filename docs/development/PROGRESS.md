@@ -37,6 +37,9 @@
 - M1-03 第四項：新增 `/tenants/current/warehouse-scopes` 分頁列表與單筆代碼檢查，先經 Tenant Context 與 `inventory.read` 角色政策，再以 `(tenant_id,user_id,warehouse_code)` 查詢明確授權；跨租戶及未授權代碼回 404。提交 `45cfccc`（`feat: 新增租戶倉庫範圍查詢與檢查`）。
 - 測試：首次完整 API 測試發現 PostgreSQL 無法推斷空 `cursor` 參數型別；改由程式在提供 cursor 時才加入參數化條件後，重建映像與重跑完整測試為 37 passed、1 skipped、6 個既有棄用警告。`git diff --cached --check` 通過，Gitleaks 掃描 5 個檔案未發現機密；未新增依賴。
 - 目前限制：倉庫授權寫入尚未提供受控操作，ERP 倉庫存在與租戶歸屬尚未驗證，現階段僅可查詢已記錄的代碼；不得視為 ERP Read API 的完整授權。提交後官方額度為 5 小時剩餘 66%、每週剩餘 79%。
+- M1-03 第五項：新增 `0005_tenant_warehouses` Migration，以全域唯一倉庫代碼登錄租戶，並以複合外鍵限制 Membership 倉庫 Scope 只能指向同租戶倉庫。PostgreSQL 測試涵蓋無 Membership 與錯租戶代碼拒絕。提交 `a075fc9`（`feat: 約束倉庫代碼的租戶歸屬`）。
+- 驗證：Migration 套用與重跑成功；API 映像重建後完整測試 37 passed、1 skipped、6 個既有棄用警告；`git diff --cached --check` 通過，Gitleaks 掃描 3 個暫存檔未發現機密。未新增依賴，未執行破壞性 downgrade。
+- 風險與下一項：若既有環境已有未登錄的 Scope 資料列，此 Migration 會安全失敗，須由操作員先核實歸屬；目前本機套用成功。仍需受控登錄倉庫與分配 Scope 的流程，且 ERP 實際倉庫歸屬需在後續整合驗證。提交後官方額度為 5 小時剩餘 60%、每週剩餘 78%。
 
 ## 2026-11-12 M1-02 自主開發循環
 
