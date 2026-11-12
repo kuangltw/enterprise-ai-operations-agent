@@ -1,0 +1,42 @@
+name: M1 基礎建置與測試
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 安裝相依套件
+        run: pip install -r apps/api/requirements-dev.txt
+      - name: Python 語法檢查
+        run: python -m compileall -q apps/api/src apps/api/migrations
+      - name: 單元測試
+        working-directory: apps/api
+        run: pytest -q
+
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: C# 建置
+        run: dotnet build apps/demo-erp/EnterpriseDemoErp.csproj -c Release
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 驗證 Compose 設定
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
