@@ -1,77 +1,70 @@
-# Enterprise AI Operations Agent
+# Enterprise AI Operations Agent（企業 AI 營運代理系統）
 
-> **Status: Design / Pre-implementation** — This repository currently contains architecture and implementation specifications. No runnable application is claimed.
+> **目前階段：Design / Pre-implementation（設計中／尚未實作）**。本 Repository 現階段提供技術規格，尚無可執行的正式系統，也尚未通過驗收。
 
-A production-oriented, open-source reference project for enterprise AI operations: **SOP knowledge Q&A (RAG), inventory/sales analysis, purchase recommendations with human approval, and Agent execution observability**.
+本專案是可公開檢視的企業 AI Agent + RAG（檢索增強生成）參考實作，包含 **SOP 知識問答、庫存與銷售分析、採購建議及人工核准、Agent 執行監控**。重點為跨系統整合、權限、安全交易與可復原性。
 
-本專案為企業 AI Agent + RAG 參考實作計畫，聚焦 **權限、可追溯性、業務規則與安全交易**。目前公開的是技術設計，程式、API、資料庫 Migration、測試結果及正式環境能力均尚待實作與驗證。
+## MVP（最小可行產品）
 
-## Planned MVP
-
-| Feature | Scope | Status |
+| 模組 | 規劃功能 | 狀態 |
 |---|---|---|
-| SOP Knowledge Q&A | Document ingestion, hybrid retrieval, citations, ACL | Planned |
-| Inventory & sales analysis | Authorized ERP API tools, deterministic calculations | Planned |
-| Purchase approval | Draft → approval → revalidation → idempotent ERP write | Planned |
-| Operations monitoring | Run events, traces, latency, token usage, cost | Planned |
+| SOP 知識問答 | 文件上傳、Hybrid Retrieval（混合檢索）、引用來源、ACL（存取控制清單） | 規劃中 |
+| 庫存與銷售分析 | 呼叫受控 ERP API、確定性庫存與銷售計算 | 規劃中 |
+| 採購與人工核准 | 建議草稿、審核、重新驗證、冪等 ERP 寫入 | 規劃中 |
+| Agent 執行監控 | Run 歷程、Trace（追蹤）、延遲、Token 與成本 | 規劃中 |
 
-## Proposed architecture
+## 預定架構
 
-```text
-React / TypeScript
-        |
-FastAPI (Authentication / Tenant / RBAC / API)
-        |
-LangGraph Application Orchestrator
-   |           |              |
-   RAG         ERP Tools      Approval & Audit
-   |           |              |
-Qdrant      PHP Demo ERP     PostgreSQL
-   |           |              |
-Object Store  ERP API      Outbox / Checkpoint
-        |
-Celery Worker / Redis / OpenTelemetry
+```mermaid
+flowchart TD
+  UI["React + TypeScript（前端）"] --> API["Python / FastAPI（身分驗證與 API）"]
+  API --> AG["LangGraph（Agent 編排）"]
+  AG --> RAG["RAG（知識檢索）"]
+  AG --> TOOLS["Tool Registry（工具註冊與授權）"]
+  AG --> APR["Approval（核准流程）"]
+  TOOLS --> ERP["C# / ASP.NET Core（Demo ERP）"]
+  RAG --> Q["Qdrant（向量索引）"]
+  APR --> DB["PostgreSQL（業務狀態）"]
+  API --> DB
+  ERP --> EDB["PostgreSQL（獨立 ERP 資料庫）"]
+  WORK["Celery Worker（背景工作程序）"] --> DB
+  WORK --> ERP
 ```
 
-- **Modular Monolith + Worker**; do not begin with microservices.
-- **LLM** interprets and explains; deterministic services own calculations and transaction decisions.
-- **Trusted execution context** supplies user/tenant identity; never take tenant identity from LLM output.
-- **Approval + DB state machine + outbox + idempotency** guard external writes.
-- **PostgreSQL** is source of truth; **Qdrant** is a rebuildable retrieval index.
+- 採用 Modular Monolith（模組化單體）+ Worker（背景工作程序），暫不導入 Microservices（微服務）。
+- AI 核心：Python、FastAPI、LangGraph、Qdrant、Redis、MinIO。
+- **Demo ERP：C# + ASP.NET Core Web API**，透過 OpenAPI（開放 API 規格）與 AI 核心整合；使用獨立 PostgreSQL Schema／資料庫帳號，首選獨立資料庫。
+- LLM（大型語言模型）負責語意理解與說明；庫存計算、授權、審核及交易寫入由確定性程式負責。
+- PostgreSQL 為業務資料的 Source of Truth（權威資料來源）；Qdrant 是可重建的檢索索引。
 
-## Design documents
+## 技術文件
 
-| Document | Description |
+| 文件 | 內容 |
 |---|---|
-| [System architecture](docs/architecture/SYSTEM.md) | Modules, boundaries, dependencies, reliability |
-| [Database schema](docs/database/SCHEMA.md) | PostgreSQL logical model, constraints, migrations |
-| [API contract](docs/api/CONTRACT.md) | REST/SSE, authorization, requests and responses |
-| [Agent workflow](docs/agent/WORKFLOW.md) | LangGraph state, nodes, routes, checkpoint and approval |
-| [Acceptance tests](docs/testing/ACCEPTANCE.md) | Functional, security, failure recovery and release gates |
-| [Security model](docs/security/SECURITY.md) | Tenant isolation, tool safety, sensitive data |
-| [Architecture decisions](docs/adr/README.md) | Documented design tradeoffs |
-| [Development conventions](AGENTS.md) | Instructions for coding agents and contributors |
+| [系統架構](docs/architecture/SYSTEM.md) | 模組職責、資料流與可靠性 |
+| [資料庫 Schema（結構）](docs/database/SCHEMA.md) | PostgreSQL DDL（資料定義語言）與資料約束 |
+| [API Contract（介面契約）](docs/api/CONTRACT.md) | REST、SSE、ERP Tool 規範 |
+| [Agent Workflow（代理程式工作流程）](docs/agent/WORKFLOW.md) | State、Node、核准及恢復 |
+| [驗收測試](docs/testing/ACCEPTANCE.md) | 測試案例、量測門檻與發布條件 |
+| [安全設計](docs/security/SECURITY.md) | 租戶隔離、工具授權、資料保護 |
+| [ADR（架構決策紀錄）](docs/adr/README.md) | 設計取捨及替代方案 |
+| [AGENTS.md](AGENTS.md) | AI Coding（AI 輔助程式開發）及文件規範 |
 
-## Implementation sequence
+## 預定開發順序
 
-1. Infrastructure, identity and tenant-aware database foundations.
-2. Document ingestion, retrieval and evidence-backed SOP Q&A.
-3. Mock ERP API and deterministic inventory/sales analysis.
-4. Purchase draft, approval, version validation and idempotent execution.
-5. Observability, reliability testing, evaluation and demo release.
+1. **M1**：基礎環境、身分驗證、Tenant（租戶）隔離、資料庫 Migration（結構遷移）。
+2. **M2**：文件匯入、RAG、來源引用、檢索評估。
+3. **M3**：C# Demo ERP、工具契約、Agent 與庫存分析。
+4. **M4**：採購草稿、人工核准、Transactional Outbox（交易式寄件匣）與 Idempotency（冪等性）。
+5. **M5**：監控、安全與故障恢復測試。
+6. **M6**：公開 Demo、文件與 Release（發布）。
 
-See [acceptance criteria](docs/testing/ACCEPTANCE.md). **No listed performance/SLO/evaluation target is currently a measured result.**
+## 專案狀態與使用限制
 
-## Local development
+- 目前只有設計文件；尚未提供 `docker compose up` 可啟動的完整環境。
+- 未完成安全、交易一致性及 E2E（端對端）測試前，不可接入真實採購交易。
+- 所有展示資料必須為 Synthetic Data（合成資料），禁止提交真實企業資料、個資與密鑰。
+- License（授權條款）將在開放原始碼實作前決定，需評估第三方相依套件授權。
+- 測試門檻為**預設驗收目標**，並非已取得的測試結果。
 
-Not yet available. A future release will supply `docker compose up`, migrations, seeded synthetic data and end-to-end demos. Do not use this repository for real ERP purchase execution until security and transaction tests pass.
-
-## Data and license
-
-- Example/test data must be synthetic. Never commit company records, credentials, live tokens or personal data.
-- Third-party dependencies and datasets must be checked for license compatibility before adding them.
-- **Project license: to be selected before source-code release.** No permission beyond applicable law is implied by an absent license.
-
-## Project state
-
-Architecture proposal v0.1 · 2026-11-12. Specifications may change during implementation; implementation and tests take precedence over outdated proposals.
+**設計基準版本：v0.1，2026-11-12。** 實作時若改變設計，必須同步更新文件、測試與 ADR。
