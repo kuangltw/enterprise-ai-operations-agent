@@ -1,0 +1,26 @@
+# 機密與本機環境
+.env
+.env.*
+!.env.example
+**/appsettings.Development.local.json
+**/secrets.json
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+# .NET
+**/bin/
+**/obj/
+.vs/
+# IDE
+.idea/
+.vscode/
+# OS
+.DS_Store
+Thumbs.db
+# 測試輸出
+coverage/
+htmlcov/
+*.log
