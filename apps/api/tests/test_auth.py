@@ -90,6 +90,8 @@ def test_openapi_contains_auth_contract():
     assert "post" in paths["/api/v1/auth/login"]
     assert "get" in paths["/api/v1/auth/me"]
     assert "post" in paths["/api/v1/auth/logout"]
+    assert "get" in paths["/api/v1/tenants"]
+    assert "get" in paths["/api/v1/tenants/{tenant_id}"]
 
 
 def test_login_limit_and_redis_outage_fail_closed(auth_client):

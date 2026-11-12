@@ -40,7 +40,16 @@
 
 登入嘗試以 Redis 對來源 IP 設定每 60 秒 10 次、對帳號設每 300 秒 5 次限制，超過回傳 429；Redis 無法使用時回傳 503。帳號識別以 HMAC 處理，不將 Email 原文寫入 Redis Key。伺服器只使用連線來源位址，不採信未受控的代理轉送 Header。
 
-首次管理員與租戶透過本機互動式初始化指令建立；目前沒有公開註冊 API，也沒有管理其他使用者與 Membership（成員資格）的 API。
+首次管理員與租戶透過本機互動式初始化指令建立；目前沒有公開註冊 API，也沒有管理其他使用者與 Membership（成員資格）的寫入 API。
+
+### 已實作：租戶讀取端點
+
+| Method | Endpoint | 功能 |
+|---|---|---|
+| GET | `/tenants` | 只列出目前使用者所屬且啟用的租戶，使用 UUID `cursor` 分頁，每頁最多 50 筆 |
+| GET | `/tenants/{tenant_id}` | 查詢目前使用者所屬的啟用租戶；其他租戶及不存在的租戶均回 404 |
+
+列表回應為 `{"items":[{"id":"<uuid>","name":"合成租戶","role":"staff"}],"next_cursor":null}`。這兩個端點只供租戶選擇與呈現；後續受保護業務端點仍須重新驗證 `X-Tenant-ID` 與 Membership。
 
 ## 2. SOP Knowledge（知識庫）API
 

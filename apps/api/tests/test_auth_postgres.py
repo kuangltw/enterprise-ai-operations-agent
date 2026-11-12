@@ -22,6 +22,7 @@ pytestmark = pytest.mark.skipif(
 
 def test_login_and_revocation_against_postgres(monkeypatch):
     user_id = uuid4()
+    other_user_id, own_tenant_id, other_tenant_id = uuid4(), uuid4(), uuid4()
     with engine.connect() as connection:
         outer = connection.begin()
         try:
@@ -30,6 +31,19 @@ def test_login_and_revocation_against_postgres(monkeypatch):
                 VALUES (:id, :email, :hash)
             """), {"id": str(user_id), "email": "synthetic-integration@example.invalid",
                    "hash": hash_password("synthetic-password-123")})
+            connection.execute(text("""
+                INSERT INTO users (id, email, password_hash)
+                VALUES (:id, :email, 'synthetic-hash')
+            """), {"id": str(other_user_id), "email": "other@example.invalid"})
+            connection.execute(text("""
+                INSERT INTO tenants (id, name) VALUES
+                (:own_id, '合成租戶甲'), (:other_id, '合成租戶乙')
+            """), {"own_id": str(own_tenant_id), "other_id": str(other_tenant_id)})
+            connection.execute(text("""
+                INSERT INTO memberships (tenant_id, user_id, role) VALUES
+                (:own_id, :user_id, 'staff'), (:other_id, :other_user_id, 'admin')
+            """), {"own_id": str(own_tenant_id), "user_id": str(user_id),
+                   "other_id": str(other_tenant_id), "other_user_id": str(other_user_id)})
 
             def override_db():
                 with Session(bind=connection, join_transaction_mode="create_savepoint") as db:
@@ -48,6 +62,21 @@ def test_login_and_revocation_against_postgres(monkeypatch):
             assert response.status_code == 200
             headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
             assert client.get("/api/v1/auth/me", headers=headers).status_code == 200
+            tenants = client.get("/api/v1/tenants", headers=headers)
+            assert tenants.status_code == 200
+            assert tenants.json()["items"] == [{
+                "id": str(own_tenant_id), "name": "合成租戶甲", "role": "staff",
+            }]
+            assert client.get(f"/api/v1/tenants/{own_tenant_id}", headers=headers).status_code == 200
+            after = client.get(f"/api/v1/tenants?cursor={own_tenant_id}", headers=headers)
+            assert after.status_code == 200
+            assert after.json()["items"] == []
+            hidden = client.get(f"/api/v1/tenants/{other_tenant_id}", headers=headers)
+            assert hidden.status_code == 404
+            assert hidden.json()["error"]["code"] == "TENANT_NOT_FOUND"
+            connection.execute(text("UPDATE tenants SET status='suspended' WHERE id=:id"),
+                               {"id": str(own_tenant_id)})
+            assert client.get("/api/v1/tenants", headers=headers).json()["items"] == []
             assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
             assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
         finally:

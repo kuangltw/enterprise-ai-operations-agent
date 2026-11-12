@@ -7,9 +7,11 @@ from uuid import UUID, uuid4
 
 from .db import engine
 from .auth import AuthError, router as auth_router
+from .tenants import router as tenant_router
 
 app = FastAPI(title="Enterprise AI Operations Agent API", version="0.1.0")
 app.include_router(auth_router)
+app.include_router(tenant_router)
 
 
 @app.exception_handler(AuthError)
