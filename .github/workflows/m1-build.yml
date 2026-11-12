@@ -31,6 +31,12 @@ jobs:
           dotnet-version: '10.0.x'
       - name: C# 建置
         run: dotnet build apps/demo-erp/EnterpriseDemoErp.csproj -c Release
+      - name: 驗證 EF Core Migration 與模型一致
+        env:
+          ConnectionStrings__ErpDb: Host=localhost;Database=demo_erp;Username=unused;Password=unused
+        run: |
+          dotnet tool install --tool-path "$RUNNER_TEMP/dotnet-tools" dotnet-ef --version 10.0.13
+          "$RUNNER_TEMP/dotnet-tools/dotnet-ef" migrations has-pending-model-changes --project apps/demo-erp/EnterpriseDemoErp.csproj
 
   frontend:
     runs-on: ubuntu-latest
