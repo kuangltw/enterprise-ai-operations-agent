@@ -1,59 +1,52 @@
-# Security Model v0.1
+# Security Model（安全模型）v0.1
 
-> Threat-model baseline, not a claim that security controls have already been implemented.
+> **安全設計基準，尚未實作或通過安全稽核。**
 
-## Trust boundaries
+## 1. Trust Boundary（信任邊界）
 
-1. **Public HTTP boundary:** authenticate JWT, validate user status and tenant membership. `X-Tenant-ID` is a requested tenant, not trusted identity.
-2. **Agent/model boundary:** user text, documents, retrieval passages and LLM outputs are untrusted. Model cannot grant its own permissions.
-3. **Tool boundary:** allowlisted tool names, validated JSON schema, warehouse scoping, safe timeout/result size, per-call policy check.
-4. **Data boundary:** PostgreSQL tenant-scoped relations, RLS as defense in depth, Qdrant tenant + ACL filter, PostgreSQL permission recheck before citation.
-5. **Transaction boundary:** approval required, separation of duties, revalidation, outbox, idempotent ERP endpoint and reconciliation.
+1. **HTTP 邊界**：JWT 驗證使用者、檢查啟用狀態與 Tenant Membership（租戶成員資格）；`X-Tenant-ID` 僅為選擇租戶。
+2. **LLM 邊界**：聊天訊息、SOP 文件、檢索文字、模型回應皆為 Untrusted Input（不可信輸入），不得給予工具權限。
+3. **Tool 邊界**：工具白名單、JSON Schema（結構）驗證、倉庫 Scope（範圍）、逾時、大小限制及執行點授權。
+4. **資料邊界**：PostgreSQL 跨租戶複合鍵與 RLS（資料列層級安全）、Qdrant Tenant + ACL 篩選、引用前再次檢查 PostgreSQL。
+5. **ERP 交易邊界**：人工核准、職責分離、最新資料驗證、Outbox、ERP 冪等鍵與結果對帳。
+6. **跨語言服務邊界**：Python FastAPI 與 **C# ASP.NET Core Demo ERP** 需有服務身分驗證，禁止直接讓外部使用者呼叫 ERP 內部寫入端點。
 
-## Role permissions (baseline)
+## 2. Role（角色）政策
 
-| Role | SOP Q&A | ERP analysis | Purchase draft | Approve |
+| Role | SOP 問答 | 庫存分析 | 採購草稿 | 核准 |
 |---|---|---|---|---|
-| admin | ACL-restricted | scoped | yes | yes |
-| manager | ACL-restricted | scoped | yes | yes |
-| staff | ACL-restricted | scoped | yes | no |
-| viewer | ACL-restricted | scoped read | no | no |
+| admin | 依 ACL | 依倉庫範圍 | 可 | 可 |
+| manager | 依 ACL | 依倉庫範圍 | 可 | 可 |
+| staff | 依 ACL | 依倉庫範圍 | 可 | 不可 |
+| viewer | 依 ACL | 限定範圍只讀 | 不可 | 不可 |
 
-A manager/admin cannot automatically view documents outside applicable resource ACL. Some tenants may configure narrower roles; the server enforces effective permissions (role + resource + scope).
+角色僅是基本允許條件，不能自動取得全部文件或倉庫資料權限。核准時還需檢查人員與草稿建立者不可相同（職責分離）。
 
-## Threat scenarios
+## 3. 威脅與控制
 
-| Threat | Control | Required test |
+| 威脅 | 防護方式 | 驗證測試 |
 |---|---|---|
-| Cross-tenant exfiltration | Trusted context, compound tenant keys, scoped queries, RLS | RAG-T07 / security suite |
-| Prompt injection in SOP document | Treat retrieved content as data, not instructions; tool policy gate | RAG-T08 |
-| Overprivileged tool invocation | Registry allowlist + per-call auth | ERP-T07 / ERP-T08 |
-| Unauthorized purchase | DB approval state + self-approval restriction + current permissions | APR-T02 / APR-T10 |
-| Replay or duplicate purchase | Stable idempotency key + ERP uniqueness + reconciliation | APR-T05 / APR-T07 |
-| Approval on stale inventory | Source versions and revalidation | APR-T06 |
-| Secret exposure in logs | Redaction, bounded event payloads, strict telemetry access | OBS-T08 |
-| Malicious uploads | File size/type limits, parser sandbox, object scanning and timeout | Security test |
-| Resource exhaustion | Rate limit, query/tool budgets, circuit breaker, bounded concurrency | Load/failure test |
+| 跨 Tenant 資料洩漏 | Trusted Context、複合 FK、RLS、ACL | RAG-T07 |
+| SOP 文件 Prompt Injection（提示詞注入） | 文件視為資料；Tool Policy Gate（工具政策關卡） | RAG-T08 |
+| Agent 執行未授權工具 | Tool Registry 白名單與執行點授權 | ERP-T07、ERP-T08 |
+| 未核准採購 | DB Approval State + 權限驗證 | APR-T02、APR-T10 |
+| 重放／重複採購 | 固定冪等鍵、ERP Unique Constraint、對帳 | APR-T05、APR-T07 |
+| 庫存變更造成舊核准失效 | Snapshot Version（快照版本）重新驗證 | APR-T06 |
+| 敏感資料落入 Log／Trace | Redaction（遮蔽）、大小限制、存取控管 | OBS-T08 |
+| 惡意上傳檔案 | 類型／大小限制、解析沙箱、掃描與逾時 | Security Test |
+| 資源耗盡 | Rate Limit（速率限制）、Token／Tool Budget、並行限制 | Load Test |
 
-## Sensitive data rules
+## 4. 資料與金鑰管理
 
-- Use only synthetic ERP/customer/document fixtures in public repo and demos.
-- Never commit `.env`, API keys, session secrets, real purchase/customer data or private support conversations.
-- Use `.env.example` with placeholders; keep secrets in runtime secret management.
-- Do not log raw JWT, complete prompts, full documents, sensitive tool outputs or payment data.
-- Audit logs must be append-only to normal application roles, have retention and controlled access.
-- Use least-privilege service credentials; DB admin role is not used by normal API.
-- External model data transfer must be explicit and configurable; local Ollama mode should be testable.
+- GitHub 公開程式庫只允許 Synthetic Data（合成資料）。
+- 不提交 `.env`、API Key、JWT Secret、密碼、真實 ERP 資料或使用者個資。
+- 使用 `.env.example` 放置假值，正式環境透過 Secret Manager（密鑰管理服務）或部署環境注入。
+- 不在 Log 中保存完整 JWT、Prompt、文件、ERP 回應或不必要個資。
+- 正常 API 程序不可使用 PostgreSQL Superuser（超級使用者）帳號；稽核 Log 對一般應用程式帳號採 Append-only（僅新增）。
+- 外部 LLM Provider（模型供應者）可能涉及資料傳輸，應明確揭露並允許替換為本機 Ollama。
 
-## Publication policy
+## 5. 公開文件政策
 
-Publish architecture, public API contract, generic security controls and synthetic test coverage. Exclude active exploit details, production infrastructure identifiers, real environment configuration, security secrets and private incident data.
+可公開架構、通用安全控制、API 契約與合成資料測試報告；不可公開真實環境的帳密、私密網路設定、內部事件紀錄及可立即利用的未修補弱點細節。
 
-## References for implementation review
-
-- OWASP Top 10 for LLM Applications / Agentic security guidance.
-- PostgreSQL Row Security Policies documentation.
-- LangGraph persistence / interrupt documentation.
-- Qdrant payload filtering and multitenancy documentation.
-
-Verify versions/compatibility before coding; this file is a design checkpoint, not an audit report.
+正式實作參考：OWASP LLM Top 10、PostgreSQL Row Security Policies、LangGraph Persistence／Interrupt、Qdrant Filter／Multitenancy 官方文件。導入前確認版本與相容性。
