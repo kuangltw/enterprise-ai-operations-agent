@@ -6,7 +6,7 @@
 |---|---|---|
 | M1-01 環境驗證 | 本機已完成 | [驗證紀錄](M1-01-VERIFICATION.md) |
 | 本機 Git 機密防護 | 本機已完成 | 2026-11-12 隔離 Repository 提交測試 6 項通過；安全修正 `141ffae9f35f91ecde0e16060ac10d9447d186f0` |
-| M1-02 身分驗證與租戶管理 | 進行中 | 首次建帳、登入、Session 撤銷、租戶讀取及 admin 建立成員已實作；成員角色變更與停權尚未實作 |
+| M1-02 身分驗證與租戶管理 | 進行中 | 建帳、登入、Session 撤銷及租戶成員管理已實作；全域 User 停權與新租戶建立尚未實作 |
 | M1-03 RBAC 與租戶隔離 | 待開始 | 尚未實作 |
 | M1-04 React 登入與管理介面 | 待開始 | 尚未實作 |
 | M1-05 CI 與整合驗收 | 待開始 | 尚未實作 |
@@ -51,6 +51,9 @@
 - 第九項工作：新增租戶 admin 專用的成員建立 API，鎖定呼叫者 Membership，交易內建立新 User 與 manager／staff／viewer Membership；非 admin 回 403、跨租戶回 404、重複 Email 回 409，禁止建立新的 admin。提交 `9fe54638e36d382b857ea420983930094e8e9f71`。
 - 測試與安全：實際 PostgreSQL 的 admin 建帳、角色限制、跨租戶與重複帳號案例通過；完整 API 測試 27 passed、6 個既有棄用警告。`git diff --cached --check` 通過，Gitleaks 掃描 7 個暫存檔未發現機密；未新增依賴。
 - 官方額度：第九項完成後 5 小時剩餘 24%、每週剩餘 88%。M1-02 仍需成員角色與停權管理，尚未進入 M1-03。
+- 第十項工作：租戶 admin 可變更 manager／staff／viewer 角色及撤銷這些成員的指定租戶 Membership；其他租戶回 404、非 admin 回 403，admin Membership 不可變更。提交 `8a3a75ac362b1d1125745e29287ed8111a75129b`。
+- 測試與安全：實際 PostgreSQL 驗證角色變更、跨租戶拒絕、admin 保護及撤銷後租戶列表立即更新；完整 API 測試 27 passed、6 個既有棄用警告。`git diff --cached --check` 通過，Gitleaks 掃描 5 個暫存檔未發現機密；未新增套件或 Schema。
+- 官方額度：第十項完成後 5 小時剩餘 19%、每週剩餘 87%。下一項為受控全域 User 停權與 Session 撤銷；完成後重新查詢額度。
 
 ## 2026-11-12 本機 Git 機密防護驗證
 
