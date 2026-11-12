@@ -13,7 +13,7 @@
 
 ## 下一個任務
 
-1. 繼續 M1-05：先追查間歇性登出 500；取得使用者明確核准後才可 Push，並依遠端 GitHub Actions 結果完成驗收。
+1. 繼續 M1-05：登出 500 已針對性重跑但未重現，若再發生應依 API 例外類型追查；取得使用者明確核准後才可 Push，並依遠端 GitHub Actions 結果完成驗收。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
 ## 2026-11-13 自動續作
@@ -23,6 +23,7 @@
 - 待推送範圍：檢查時本機 `main` 相對 `origin/main` 超前 1 筆，即 `83f57a1`，Staged Diff 為空。Gitleaks 對 `origin/main..HEAD` 掃描 1 筆 Commit、約 15.76 KB，未發現機密。遠端追蹤分支已在本輪期間更新，推送前須再核對；未執行 Push。官方額度：此項提交後 5 小時剩餘 58%、每週剩餘 64%。
 - M1 驗收尚未完成：遠端 Python、C#、React、Compose、Secret Scan、Playwright Job 未就本次 E2E Commit 取得結果；乾淨資料庫初始化案例在既有資料庫跳過，隔離 E2E 已驗證 Alembic 建立新資料庫。間歇性登出 500 須持續追查，不得視為已修復。
 - 遠端唯讀核對：`origin/main` 的 `58213d1` 已有 [M1 建置工作](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43316334610)與[機密掃描工作](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43316334596)成功結果；前者的 Python、dotnet、frontend、compose 四個 Job 均成功，後者的 Gitleaks Job 成功。這些結果不包含本輪新增的 E2E Job 與本機待推送 Commit。
+- 間歇性登出 500 追查：執行器新增可轉交 Playwright 參數，提交 `79799b7`（`test: 支援隔離環境重複執行 Playwright 案例`）；以 `--grep=API --repeat-each=4` 在隔離資料庫重跑跨租戶與登出案例，4 passed，未再出現 500。`git diff --cached --check` 與 Gitleaks 暫存區 2 個檔案掃描、Hook 再掃描通過。原因尚未確定，不宣稱已修復；提交後官方額度為 5 小時剩餘 45%、每週剩餘 62%。
 
 - 本輪重新查詢官方額度：開始時 5 小時剩餘 98%、每週剩餘 70%；Git 工作區乾淨。瀏覽器控制工具僅回報空的 MCP Apps 分頁及原生 app-server 啟動失敗，Chrome DevTools 也找不到瀏覽器，因此 M1-04 互動驗收尚未執行。
 - M1-05 第三項：受保護 API 於 OpenAPI 宣告 HTTP Bearer Security Scheme，並以 Contract Test 檢查登入端點公開、受保護端點需 Bearer；另驗證錯誤格式的憑證仍回 401。同步 API 契約文件。提交 `46a62bd`（`test: 補齊 Bearer 驗證的 OpenAPI 契約`）。
