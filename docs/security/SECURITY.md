@@ -22,6 +22,8 @@
 
 角色僅是基本允許條件，不能自動取得全部文件或倉庫資料權限。核准時還需檢查人員與草稿建立者不可相同（職責分離）。
 
+M1-03 已建立可重用的 Role Policy（角色政策）：`tenant.read` 開放所有成員、`member.manage` 僅 admin、`knowledge.ask` 與 `inventory.read` 開放所有成員、`purchase.draft.create` 開放 staff 以上、`purchase.approve` 開放 manager 以上。未知角色或權限一律拒絕。實際業務端點仍須另行檢查文件 ACL、Warehouse Scope（倉庫資料範圍）、核准狀態與職責分離；目前未實作這些業務端點。
+
 ## 3. 威脅與控制
 
 | 威脅 | 防護方式 | 驗證測試 |

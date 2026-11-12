@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from .auth import AuthError, Principal, get_current_user, get_db
 from .identity_input import normalize_email, validate_new_password
 from .passwords import hash_password
-from .tenant_context import TenantContext, get_tenant_context
+from .role_policy import allows, require_permission
+from .tenant_context import TenantContext
 
 router = APIRouter(prefix="/api/v1/tenants", tags=["租戶"])
 
@@ -56,7 +57,7 @@ def require_tenant_admin(tenant_id: UUID, principal: Principal, db: Session) -> 
            "user_id": str(principal.user_id)}).mappings().first()
     if membership is None:
         raise AuthError(404, "TENANT_NOT_FOUND", "租戶不存在或無法存取")
-    if membership["role"] != "admin":
+    if not allows(membership["role"], "member.manage"):
         raise AuthError(403, "FORBIDDEN", "沒有管理成員的權限")
 
 
@@ -98,7 +99,7 @@ def list_tenants(
 
 @router.get("/current", response_model=TenantItem)
 def get_current_tenant(
-    context: TenantContext = Depends(get_tenant_context),
+    context: TenantContext = Depends(require_permission("tenant.read")),
 ) -> TenantItem:
     return TenantItem(id=context.tenant_id, name=context.name, role=context.role)
 
