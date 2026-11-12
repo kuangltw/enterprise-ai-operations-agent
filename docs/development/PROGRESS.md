@@ -9,7 +9,7 @@
 | M1-02 身分驗證與租戶管理 | 本機功能完成，整合驗收待 M1-05 | 密碼雜湊、JWT、Session、首次建帳、受控新租戶、成員管理及全域停權已有測試；空白資料庫初始化案例在既有資料庫跳過 |
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機建置完成，瀏覽器驗收待執行 | 登入、登出、租戶選擇、受保護畫面與 API 錯誤處理已實作；目前瀏覽器工具不可用 |
-| M1-05 CI 與整合驗收 | 待開始 | 尚未實作 |
+| M1-05 CI 與整合驗收 | 進行中 | 422 錯誤契約與 PostgreSQL／Redis CI 測試設定已提交；遠端 CI、瀏覽器驗收及完整回歸待完成 |
 
 ## 下一個任務
 
@@ -48,7 +48,10 @@
 - 驗證：`docker compose build web` 的 TypeScript 與 Vite 建置通過；`docker compose config --quiet` 通過；`docker compose up -d web` 啟動成功，本機 HTTP 首頁回 200。前端代理 `/api/v1/auth/me` 回 503，原因是本機 Compose JWT 金鑰尚未設定為有效值，符合後端安全預期，未用真實憑證測試。瀏覽器工具找不到設定的 Chrome 可執行檔，UI 互動與視覺驗收未執行。`git diff --cached --check` 通過，Gitleaks 掃描 7 個檔案未發現機密；未新增依賴。
 - 官方額度：提交後 5 小時剩餘 38%、每週剩餘 75%。下一項為 M1-05 Contract／安全／CI 整合驗收；前端登入成功路徑尚需瀏覽器驗證。
 - M1-05 首項：統一 FastAPI 請求驗證錯誤為既定 `error` 格式，422 回 `VALIDATION_ERROR` 且不回傳輸入原文，並更新 API 契約與測試。提交 `9a3790f`（`feat: 統一請求驗證錯誤格式`）。
-- 驗證：Docker API 映像重建後完整 PostgreSQL／Redis 測試 39 passed、1 skipped、6 個既有棄用警告；暫存差異與 Gitleaks 3 個檔案掃描通過，無新增依賴。提交後官方額度為 5 小時剩餘 30%、每週剩餘 74%。下一項為 CI 整合測試工作。
+- 驗證：Docker API 映像重建後完整 PostgreSQL 測試 39 passed、1 skipped（Redis 整合案例尚未啟用）、6 個既有棄用警告；暫存差異與 Gitleaks 3 個檔案掃描通過，無新增依賴。提交後官方額度為 5 小時剩餘 30%、每週剩餘 74%。下一項為 CI 整合測試工作。
+- M1-05 第二項：GitHub Actions 的 Python 工作新增 PostgreSQL、Redis 服務與 Alembic Migration，啟用兩種整合測試。提交 `4f03783`（`ci: 執行資料庫與 Redis 整合測試`）。本機以兩種整合旗標實際執行 40 passed、6 個既有棄用警告；暫存差異檢查與 Gitleaks 掃描 1 個檔案通過。遠端 GitHub Actions 尚未執行，不宣稱遠端 CI 通過。提交後官方額度為 5 小時剩餘 23%、每週剩餘 72%。
+- **掃描判定修正：**全工作目錄 Gitleaks 曾在本機 `.env` 回報 2 筆 `generic-api-key` 特徵，在 `tests/security/__pycache__/test_pre_commit.cpython-312.pyc` 回報 1 筆 `aws-access-token` 特徵，因而暫停。重新核對後，兩檔均未被 Git 追蹤，暫存區為空，Git 歷史 126 筆 Commit 掃描未發現機密；目前沒有提交或外洩證據。這次將「被忽略的本機檔案命中」誤判為外洩停止條件，已更正。未讀取或記錄機密值；本機 `.env` 仍須維持忽略，不應提交。
+- 額度與後續：重新查詢官方 Codex 額度為 5 小時剩餘 16%、每週剩餘 71%。為保留至少 15% 額度，本輪先完成安全判定與交接修正，不啟動可能超過剩餘額度的大型任務。下一輪先查額度與 Git 狀態，再完成 M1-05 遠端 CI、瀏覽器互動驗收、依賴漏洞檢查及完整回歸。M1-04 的瀏覽器成功登入路徑仍未驗證；M1-05 未完成，不進入 M2。
 
 ## 2026-11-12 M1-02 自主開發循環
 
