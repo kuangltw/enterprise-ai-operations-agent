@@ -21,8 +21,12 @@ __pycache__/
 .DS_Store
 Thumbs.db
 # 測試輸出
+node_modules/
+dist/
 coverage/
 htmlcov/
+test-results/
+.playwright-mcp/
 *.log
 
 # 額外私密設定與金鑰

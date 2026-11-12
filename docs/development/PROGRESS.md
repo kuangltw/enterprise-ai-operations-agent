@@ -125,6 +125,14 @@
 - Python 測試現有的棄用警告。
 - 本機 Hook 已在目前 Repository 啟用；其他電腦或重新 Clone 後仍須個別啟用。
 
+## 2026-11-13 前端瀏覽器自動化環境
+
+- 工作項目：安裝並驗證 Playwright MCP，修復 Vite 開發服務的本機 `/api` 代理，執行官方頁面與專案登入錯誤流程的瀏覽器互動測試。
+- 修改檔案：`.gitignore`、`apps/web/package.json`、`apps/web/vite.config.ts`、`scripts/testing/playwright_mcp_probe.py`、`docs/development/PLAYWRIGHT-MCP-VERIFICATION.md` 及本紀錄；另新增使用者層級的 Playwright MCP 設定，未更動原有 MCP 設定。
+- 實際測試：`npx -y @playwright/mcp@latest --version` 回報 `0.0.85`；`npm run build` 通過；`python scripts/testing/playwright_mcp_probe.py` 通過官方 TodoMVC 新增／勾選及本機登入 401 互動測試，兩張 Screenshot 保存在忽略追蹤的 `test-results/`。
+- 限制：目前對話需重啟 Codex／建立新對話後確認 Playwright 工具載入；未使用有效帳號，登入成功、租戶選擇與登出未測。詳見 [Playwright MCP 驗收紀錄](PLAYWRIGHT-MCP-VERIFICATION.md)。
+- 下一項任務：使用獨立合成測試帳號與資料狀態，補齊前端成功登入、租戶選擇及登出的 E2E 測試。
+
 ## Codex 每輪紀錄範本
 
 ### 日期與任務編號
