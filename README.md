@@ -49,6 +49,8 @@ flowchart TD
 | [安全設計](docs/security/SECURITY.md) | 租戶隔離、工具授權、資料保護 |
 | [ADR（架構決策紀錄）](docs/adr/README.md) | 設計取捨及替代方案 |
 | [AGENTS.md](AGENTS.md) | AI Coding（AI 輔助程式開發）及文件規範 |
+| [Codex 自主開發循環](docs/development/AUTONOMOUS_LOOP.md) | 自主開發、額度停止門檻、本機 Hook 與資訊安全 |
+| [開發進度](docs/development/PROGRESS.md) | M1 進度與任務交接 |
 
 ## 預定開發順序
 
@@ -64,6 +66,17 @@ flowchart TD
 已加入 React + TypeScript 前端、FastAPI 健康檢查、ASP.NET Core Demo ERP 健康檢查、兩套 PostgreSQL 資料庫、Alembic / EF Core 初始 Migration、Docker Compose 與 CI 建置設定。
 
 2026-11-12 的 M1-01 本機驗證已通過 Compose 設定、映像建置、Python 測試、C# 與 React 建置、Alembic／EF Core 初始 Migration，以及兩個 API 的 HTTP 健康檢查。指令、結果及未驗證範圍見 [M1 開發環境指南](docs/development/GETTING_STARTED.md)與 [M1-01 驗證紀錄](docs/development/M1-01-VERIFICATION.md)。這不代表 M1 的身分驗證與租戶隔離已完成。
+
+## Git 機密防護（本機必須另行啟用）
+
+已新增 `.githooks/pre-commit` 與 Gitleaks（機密掃描）CI。**Git Hook 不會在 Clone 時自動啟用**；請先依照 [自主開發循環文件](docs/development/AUTONOMOUS_LOOP.md) 安裝 Gitleaks 並執行：
+
+```powershell
+git config --local core.hooksPath .githooks
+python scripts/security/check_staged_secrets.py
+```
+
+掃描只是防線之一，任何真實金鑰都不可加入 Git 暫存區，更不可推送到遠端。
 
 ## 專案狀態與使用限制
 
