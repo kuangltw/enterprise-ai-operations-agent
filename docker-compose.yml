@@ -1,5 +1,12 @@
 name: enterprise-ai-operations-agent
 services:
+  web:
+    build:
+      context: ./apps/web
+    ports:
+      - "127.0.0.1:5173:80"
+    networks: [internal]
+
   agent-db:
     image: postgres:16-alpine
     environment:
