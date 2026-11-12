@@ -40,6 +40,8 @@
 
 登入嘗試以 Redis 對來源 IP 設定每 60 秒 10 次、對帳號設每 300 秒 5 次限制，超過回傳 429；Redis 無法使用時回傳 503。帳號識別以 HMAC 處理，不將 Email 原文寫入 Redis Key。伺服器只使用連線來源位址，不採信未受控的代理轉送 Header。
 
+首次管理員與租戶透過本機互動式初始化指令建立；目前沒有公開註冊 API，也沒有管理其他使用者與 Membership（成員資格）的 API。
+
 ## 2. SOP Knowledge（知識庫）API
 
 | Method | Endpoint | 功能 | 權限 |
