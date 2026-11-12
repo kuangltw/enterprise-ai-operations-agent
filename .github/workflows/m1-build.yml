@@ -76,7 +76,10 @@ jobs:
           node-version: '22'
       - name: 安裝前端套件
         working-directory: apps/web
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
+      - name: 前端相依套件安全稽核
+        working-directory: apps/web
+        run: npm audit --audit-level=high
       - name: 前端建置
         working-directory: apps/web
         run: npm run build
