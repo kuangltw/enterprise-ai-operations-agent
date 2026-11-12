@@ -20,6 +20,7 @@ docker compose ps
 ```
 
 預設服務：
+- React 前端：\`http://127.0.0.1:5173\`（目前僅展示功能規劃）
 - FastAPI：`http://127.0.0.1:8000/docs`（Swagger API 文件）
 - FastAPI Liveness（存活檢查）：`http://127.0.0.1:8000/health/live`
 - FastAPI Readiness（就緒檢查）：`http://127.0.0.1:8000/health/ready`
@@ -54,5 +55,5 @@ docker compose down -v
 - 目前只提供健康檢查，尚未實作 Authentication（驗證）、RBAC（角色式存取控制）及 Tenant API。
 - C# ERP 只有商品、倉庫與庫存初始資料模型，尚未實作銷售、採購、實際業務工具 API。
 - EF Core 的啟動自動 Migration 只用於本機 Demo；正式環境改以專用部署 Job 執行。
-- 尚未建立 React 前端；在完成 M1 安全基礎後再新增。
+- React 前端目前僅有靜態 M1 首頁，尚未接入 API 或登入流程。
 - 仍須完成 Docker 實測、跨服務 Contract Test（契約測試）與安全測試。
