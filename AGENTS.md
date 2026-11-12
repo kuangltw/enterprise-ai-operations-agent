@@ -1,6 +1,6 @@
 # AI Coding（AI 輔助程式開發）協作規範
 
-本 Repository 目前處於 **Design / Pre-implementation（設計中／尚未實作）**。開始寫程式前，先閱讀 `README.md` 及 `docs/` 中的架構、Schema、API、Workflow、安全與驗收文件。
+本 Repository 已完成 M1-01 本機環境驗證，正在進行 M1 身分驗證與安全基礎工作。開始寫程式前，先閱讀 `README.md` 及 `docs/` 中的架構、Schema、API、Workflow、安全與驗收文件。
 
 ## 語言與版本管理規範
 
@@ -30,6 +30,18 @@
 6. 執行結果不明時先向 ERP 查詢／對帳，不可盲目重試建立採購單。
 7. Schema 變更必須使用 Migration；禁止人工修改正式資料庫結構。
 8. 禁止提交真實企業資料、密鑰、Token、敏感 Log 及未授權的第三方程式碼。
+
+## 自主開發循環與機密防護（強制）
+
+- 使用 Codex Desktop 時，必須遵守 [AUTONOMOUS_LOOP.md](docs/development/AUTONOMOUS_LOOP.md)，並以 [PROGRESS.md](docs/development/PROGRESS.md) 記錄每輪任務。
+- 自主循環限於 M1-02 → M1-03 → M1-04 → M1-05，M1-01 已完成本機驗證；不得自行進入 M2。
+- 每項小任務依序執行：檢查規格 → 實作 → 測試 → Code Review（程式碼審查）→ Secret Scan（機密掃描）→ 中文 Commit → 更新進度。
+- 額度若能可靠取得官方剩餘數值，任一適用額度 ≤15% 時停止新工作；**無法確認額度時最多完成兩項小任務就停止，要求人工確認**，不得自行估算。
+- 禁止自動 `git push`、Force Push、`git reset --hard`、`git clean`、`docker compose down -v`、修改 Git 歷史或部署到正式環境。
+- Commit 前必須檢查 Staged Diff（暫存區差異）與 Gitleaks 掃描結果，缺少掃描工具時禁止提交。不得使用 `--no-verify` 或其他方式繞過 Hook。
+- 禁止提交 `.env`、API Key、Token、JWT Secret、私密金鑰、真實連線密碼、Cookie、真實企業資料、個資及敏感 Log。若疑似洩漏，停止作業、不要輸出值，通知使用者評估撤銷或輪替。
+- `.gitignore` 不能防護已追蹤檔案；禁止僅依賴 GitHub Actions（上傳後檢查）取代本機 Pre-commit Hook（提交前檢查）。
+- Git Hook 的本機啟用方式與掃描工具安裝限制，請見自主開發循環文件。
 
 ## 開發流程與完成條件
 
