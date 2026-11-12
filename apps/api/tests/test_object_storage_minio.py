@@ -8,7 +8,10 @@ import pytest
 from minio import Minio
 from minio.error import S3Error
 
-from src.object_storage import MAX_PDF_BYTES, InvalidPdf, PdfTooLarge, store_pdf
+from src.object_storage import (
+    MAX_PDF_BYTES, InvalidObjectKey, InvalidPdf, PdfTooLarge,
+    reserve_pdf_key, store_pdf,
+)
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_MINIO_TESTS") != "1", reason="需明確啟用隔離 MinIO 整合測試",
@@ -27,8 +30,10 @@ def test_store_pdf_uses_generated_key_and_enforces_size():
     tenant_id, document_id, version_id = uuid4(), uuid4(), uuid4()
     payload = b"%PDF-1.4\nsynthetic test only\n%%EOF\n"
 
+    reserved_key = reserve_pdf_key(tenant_id, document_id, version_id)
     stored = store_pdf(client, bucket, tenant_id, document_id, version_id,
-                       BytesIO(payload))
+                       BytesIO(payload), reserved_key=reserved_key)
+    assert stored.key == reserved_key
     assert stored.key.startswith(f"{tenant_id}/{document_id}/{version_id}/")
     assert stored.key.endswith(".pdf")
     assert stored.size == len(payload)
@@ -43,6 +48,15 @@ def test_store_pdf_uses_generated_key_and_enforces_size():
     with pytest.raises(InvalidPdf):
         store_pdf(client, bucket, tenant_id, document_id, uuid4(),
                   BytesIO(b"not a PDF"))
+    with pytest.raises(InvalidObjectKey):
+        store_pdf(client, bucket, tenant_id, document_id, uuid4(),
+                  BytesIO(payload), reserved_key=reserved_key)
+    with pytest.raises(InvalidObjectKey):
+        store_pdf(client, bucket, tenant_id, document_id, version_id,
+                  BytesIO(payload), reserved_key=reserved_key.replace(".pdf", "/x.pdf"))
+    with pytest.raises(InvalidObjectKey):
+        store_pdf(client, bucket, tenant_id, document_id, version_id,
+                  BytesIO(payload), reserved_key="")
     with pytest.raises(PdfTooLarge):
         store_pdf(client, bucket, tenant_id, document_id, uuid4(),
                   BytesIO(b"%PDF-" + b"x" * MAX_PDF_BYTES))
