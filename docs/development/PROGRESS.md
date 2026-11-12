@@ -45,6 +45,9 @@
 - 第七項工作：新增只列出目前使用者所屬啟用租戶的列表與單筆查詢 API，列表以 UUID Cursor 分頁；其他使用者的租戶與不存在租戶均回 404。提交 `8072e223739913e95b216386c5ac23146ccae8ef`。
 - 測試與安全：實際 PostgreSQL 驗證跨租戶查詢、停用租戶隱藏與 Cursor；完整 API 測試 25 passed、6 個既有棄用警告。`git diff --cached --check` 通過，Gitleaks 掃描 6 個暫存檔未發現機密；未新增依賴。
 - 官方額度：第七項完成後 5 小時剩餘 36%、每週剩餘 90%。下一項先補 Email 大小寫唯一約束，再建立受控使用者與 Membership 寫入。
+- 第八項工作：新增 `0003_email_case_unique` Migration，以 PostgreSQL 唯一索引阻止 Email 大小寫變體重複，並同步 Schema。提交 `ac293487ec29e92684f9539391032b47703e5a35`。
+- 驗證：套用前只讀檢查為 0 組大小寫重複；Migration 套用至 `0003_email_case_unique` 並成功重跑。PostgreSQL 整合測試確認重複 Email 被拒絕且合成資料回滾；完整 API 測試 26 passed、6 個既有棄用警告。`git diff --cached --check` 通過，Gitleaks 掃描 3 個暫存檔未發現機密。
+- 官方額度：第八項完成後 5 小時剩餘 31%、每週剩餘 89%。下一項為受控 User 與 Membership 寫入 API。
 
 ## 2026-11-12 本機 Git 機密防護驗證
 
