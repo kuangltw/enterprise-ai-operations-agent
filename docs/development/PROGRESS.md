@@ -29,6 +29,8 @@
 - M1-02 本機功能審查：JWT 宣告不含可自行宣稱的 Role／Tenant，受保護端點重新查詢 User、Session 與 Membership；停權及成員撤銷均已測試。新租戶建立僅限資料庫操作員的受控指令。完整 M1 Contract／CI／乾淨資料庫驗收仍列於 M1-05，不宣稱已完成。
 - M1-03 首項：新增 `TenantContext` 相依性與 `GET /api/v1/tenants/current`，每次依 JWT 身分及 `X-Tenant-ID` 查詢啟用租戶的 Membership；跨租戶及停用租戶均回 404。同步 OpenAPI 路徑測試及 API 契約。提交 `7fe6f80`（`feat: 建立可信租戶上下文查詢`）。
 - 測試與安全：Docker API 映像重建、Compose PostgreSQL／Redis 完整 API 測試 29 passed、1 skipped、6 個既有棄用警告；`git diff --cached --check` 通過，Gitleaks 掃描 5 個暫存檔未發現機密；未新增依賴。提交後官方額度為 5 小時剩餘 85%、每週剩餘 82%，可繼續 Role Policy。
+- M1-03 第二項：建立 `Role Policy` 與可重用的 `require_permission` 相依性，會員管理端點也改採同一政策。角色矩陣依安全規格實作，未知角色及未知權限一律拒絕。ACL、倉庫範圍與職責分離尚須另行檢查。提交 `c7b8a86`（`feat: 新增可重用角色授權政策`）。
+- 驗證：API 映像重建與 Compose PostgreSQL／Redis 完整測試 35 passed、1 skipped、6 個既有棄用警告；暫存差異檢查通過，Gitleaks 掃描 4 個檔案未發現機密。無新增依賴。提交後官方額度為 5 小時剩餘 80%、每週剩餘 81%；下一項為倉庫資料範圍的 Schema 與授權檢查。
 
 ## 2026-11-12 M1-02 自主開發循環
 
