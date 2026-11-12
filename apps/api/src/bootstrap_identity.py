@@ -1,7 +1,6 @@
 """僅供空白資料庫首次建立管理員與租戶。密碼從終端機隱藏讀取。"""
 
 import getpass
-import re
 from uuid import uuid4
 
 from sqlalchemy import text
@@ -9,18 +8,16 @@ from sqlalchemy.engine import Connection
 
 from .db import engine
 from .passwords import hash_password
+from .identity_input import normalize_email, validate_new_password
 
 
 def create_initial_admin(connection: Connection, email: str, password: str, tenant_name: str) -> None:
     """呼叫端須提供交易；鎖定與寫入一律在同一筆交易內。"""
-    normalized_email = email.strip().lower()
+    normalized_email = normalize_email(email)
     name = tenant_name.strip()
-    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized_email) or len(normalized_email) > 255:
-        raise ValueError("Email 格式不符規定")
     if not 1 <= len(name) <= 120:
         raise ValueError("租戶名稱長度不符規定")
-    if len(password) < 12:
-        raise ValueError("密碼至少需要 12 個字元")
+    validate_new_password(password)
     password_hash = hash_password(password)
 
     connection.execute(text("SELECT pg_advisory_xact_lock(934814)"))

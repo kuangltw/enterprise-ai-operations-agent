@@ -1,13 +1,17 @@
 """依目前使用者的成員資格讀取可選租戶。"""
 
-from uuid import UUID
+from typing import Literal
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .auth import AuthError, Principal, get_current_user, get_db
+from .identity_input import normalize_email, validate_new_password
+from .passwords import hash_password
 
 router = APIRouter(prefix="/api/v1/tenants", tags=["租戶"])
 
@@ -21,6 +25,19 @@ class TenantItem(BaseModel):
 class TenantList(BaseModel):
     items: list[TenantItem]
     next_cursor: UUID | None
+
+
+class CreateMemberRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=255)
+    password: str = Field(min_length=12, max_length=1024)
+    role: Literal["manager", "staff", "viewer"]
+
+
+class MemberCreated(BaseModel):
+    id: UUID
+    tenant_id: UUID
+    email: str
+    role: str
 
 
 @router.get("", response_model=TenantList)
@@ -60,3 +77,48 @@ def get_tenant(
     if row is None:
         raise AuthError(404, "TENANT_NOT_FOUND", "租戶不存在或無法存取")
     return TenantItem(id=row["id"], name=row["name"], role=row["role"])
+
+
+@router.post("/{tenant_id}/members", response_model=MemberCreated, status_code=201)
+def create_member(
+    tenant_id: UUID,
+    body: CreateMemberRequest,
+    principal: Principal = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MemberCreated:
+    membership = db.execute(text("""
+        SELECT m.role FROM memberships AS m
+        JOIN tenants AS t ON t.id = m.tenant_id
+        WHERE m.tenant_id = :tenant_id AND m.user_id = :user_id
+          AND t.status = 'active'
+        FOR UPDATE OF m
+    """), {"tenant_id": str(tenant_id),
+           "user_id": str(principal.user_id)}).mappings().first()
+    if membership is None:
+        raise AuthError(404, "TENANT_NOT_FOUND", "租戶不存在或無法存取")
+    if membership["role"] != "admin":
+        raise AuthError(403, "FORBIDDEN", "沒有管理成員的權限")
+    try:
+        email = normalize_email(body.email)
+        validate_new_password(body.password)
+    except ValueError as exc:
+        raise AuthError(422, "INVALID_MEMBER", "成員資料不符規定") from exc
+
+    user_id = uuid4()
+    password_hash = hash_password(body.password)
+    try:
+        db.execute(text("""
+            INSERT INTO users (id, email, password_hash)
+            VALUES (:id, :email, :password_hash)
+        """), {"id": str(user_id), "email": email,
+               "password_hash": password_hash})
+        db.execute(text("""
+            INSERT INTO memberships (tenant_id, user_id, role)
+            VALUES (:tenant_id, :user_id, :role)
+        """), {"tenant_id": str(tenant_id), "user_id": str(user_id),
+               "role": body.role})
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise AuthError(409, "MEMBER_CONFLICT", "成員無法建立") from exc
+    return MemberCreated(id=user_id, tenant_id=tenant_id, email=email, role=body.role)
