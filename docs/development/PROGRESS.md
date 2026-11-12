@@ -10,7 +10,7 @@
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
 | M1-05 CI 與整合驗收 | Accepted with Known Issues（有條件驗收通過） | `66aabc9` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本次隔離 E2E 4 passed；單次登出 500 留存[獨立追蹤](issues/LOGOUT-500.md) |
-| M2 RAG | 已開始：工作清單與第一項最小工作 | 見下方 M2 交接；不可將未實作功能標為完成 |
+| M2 RAG | 首項文件資料庫基礎已實作並測試 | `0006_documents` 與跨租戶約束測試；上傳、MinIO、解析、索引、問答仍未實作 |
 
 ## 下一個任務
 
@@ -30,7 +30,8 @@
   7. Hybrid Retrieval（混合檢索）：Dense／Sparse 融合與排序測試。
   8. Citation（來源引用）：文件版本、區塊、頁碼與原文驗證。
   9. RAG Evaluation（檢索評估）：固定合成／公開資料集、Recall@5、引用正確率及拒答率。
-- M2 首項僅處理文件 Schema 與約束；上傳、MinIO、解析、索引及問答仍為規劃中。無法可靠取得官方剩餘額度時，本輪最多完成 M1 驗收與 M2 首項兩項小任務，之後停止新工作並要求人工確認。
+- M2 首項實作：`apps/api/migrations/versions/0006_documents.py` 建立文件、版本、ACL 與同租戶複合外鍵；`apps/api/tests/test_documents_postgres.py` 驗證跨租戶版本／ACL 拒絕及 `current_version` 必須指向現有版本。隔離 tmpfs PostgreSQL 從空白套用 Alembic 至 head，並執行文件及登出整合測試共 **3 passed、1 warning**；容器已清理。`ready` 後發布、Owner 同租戶成員資格、SHA256 去重、上傳、MinIO、解析、索引及問答仍為規劃中，禁止提前開放對外 API。此項提交 SHA 以本輪 Git 紀錄為準。
+- 無法可靠取得官方剩餘額度時，本輪至此完成 M1 驗收與 M2 首項兩項小任務；依停止政策不再啟動新工作，須由主人確認剩餘額度後再繼續。
 
 ## 2026-11-13 自動續作
 
