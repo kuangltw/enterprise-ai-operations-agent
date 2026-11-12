@@ -1,4 +1,8 @@
 name: M1 基礎建置與測試
+
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]

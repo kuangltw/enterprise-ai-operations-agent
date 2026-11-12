@@ -54,9 +54,7 @@ def main() -> int:
 
     blocked = [p for p in paths if sensitive_path(p)]
     if blocked:
-        print("安全檢查拒絕提交：暫存區包含高風險檔案路徑：", file=sys.stderr)
-        for path in blocked:
-            print(f"  {path}", file=sys.stderr)
+        print("安全檢查拒絕提交：暫存區包含高風險檔案路徑。", file=sys.stderr)
         print("請將檔案移出暫存區並處理機密輪替。", file=sys.stderr)
         return 1
 
