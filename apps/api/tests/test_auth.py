@@ -83,6 +83,8 @@ def test_missing_signing_key_fails_closed(auth_client, monkeypatch):
 def test_missing_token_is_rejected(auth_client):
     client, _ = auth_client
     assert client.get("/api/v1/auth/me").status_code == 401
+    for value in ("Basic synthetic", "Bearer ", "Bearer synthetic invalid"):
+        assert client.get("/api/v1/auth/me", headers={"Authorization": value}).status_code == 401
 
 
 def test_validation_error_uses_public_error_contract(auth_client):
@@ -95,7 +97,8 @@ def test_validation_error_uses_public_error_contract(auth_client):
 
 
 def test_openapi_contains_auth_contract():
-    paths = app.openapi()["paths"]
+    schema = app.openapi()
+    paths = schema["paths"]
     assert "post" in paths["/api/v1/auth/login"]
     assert "get" in paths["/api/v1/auth/me"]
     assert "post" in paths["/api/v1/auth/logout"]
@@ -110,6 +113,17 @@ def test_openapi_contains_auth_contract():
     scope_path = "/api/v1/tenants/{tenant_id}/members/{user_id}/warehouse-scopes/{warehouse_code}"
     assert "put" in paths[scope_path]
     assert "delete" in paths[scope_path]
+    schemes = schema["components"]["securitySchemes"]
+    assert schemes["HTTPBearer"] == {"type": "http", "scheme": "bearer"}
+    assert "security" not in paths["/api/v1/auth/login"]["post"]
+    for path, method in (
+        ("/api/v1/auth/me", "get"),
+        ("/api/v1/auth/logout", "post"),
+        ("/api/v1/tenants", "get"),
+        ("/api/v1/tenants/current", "get"),
+        (scope_path, "put"),
+    ):
+        assert {"HTTPBearer": []} in paths[path][method]["security"]
 
 
 def test_login_limit_and_redis_outage_fail_closed(auth_client):

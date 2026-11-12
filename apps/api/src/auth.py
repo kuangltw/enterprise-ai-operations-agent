@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from typing import Iterator
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Header, Request, status
+from fastapi import APIRouter, Depends, Request, Security, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from .tokens import issue_access_token, verify_access_token
 
 router = APIRouter(prefix="/api/v1/auth", tags=["身分驗證"])
 _DUMMY_HASH = hash_password("synthetic-dummy-password")
+_bearer = HTTPBearer(auto_error=False)
 
 
 class AuthError(Exception):
@@ -64,12 +66,12 @@ def get_signing_key() -> str:
 
 
 def get_current_user(
-    authorization: str | None = Header(default=None),
+    credentials: HTTPAuthorizationCredentials | None = Security(_bearer),
     db: Session = Depends(get_db),
     signing_key: str = Depends(get_signing_key),
 ) -> Principal:
-    scheme, _, token = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not token or " " in token:
+    token = credentials.credentials if credentials is not None else ""
+    if not token or " " in token:
         raise AuthError(401, "UNAUTHENTICATED", "請先登入")
     claims = verify_access_token(token, signing_key)
     if claims is None:

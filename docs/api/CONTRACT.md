@@ -1,11 +1,11 @@
 # API Contract（API 介面契約）v0.1
 
-> 本文件包含已實作的 M1 身分驗證端點與後續預定規格；尚未完成租戶及業務端點。
+> 本文件區分已實作的 M1 身分驗證、租戶管理端點與後續預定的業務端點。
 
 ## 1. 共通規範
 
 - 對外 Base Path（基本路徑）：`/api/v1`。
-- `Authorization: Bearer <JWT>`：使用者驗證。
+- `Authorization: Bearer <JWT>`：使用者驗證；已實作的受保護端點在 OpenAPI 中宣告 HTTP Bearer Security Scheme（安全機制）。
 - `X-Tenant-ID: <uuid>`：選擇租戶；後端必須驗證成員資格，Header 不等於授權。
 - `X-Request-ID: <uuid>`：Trace Correlation（追蹤關聯）。
 - `Idempotency-Key: <uuid>`：非同步建立與高風險交易防重複。
