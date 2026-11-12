@@ -28,6 +28,7 @@
 - M1-05 第五項：在暫時性 API 容器安裝 `pip-audit` 並解析 `requirements-dev.txt`，結果 `No known vulnerabilities found`。重跑本機 Alembic Migration 成功；`docker compose build demo-erp` 成功，`docker compose up -d` 啟動完整服務且 API、Demo ERP、資料庫與 Redis 健康。本機 Web 首頁 200、經 Web 代理的未登入 `/api/v1/auth/me` 401、API `/health/ready` 200。
 - 安全回歸：第一次執行提交前安全測試因目前終端 PATH 缺少 Gitleaks 而失敗；以已安裝的 Gitleaks 路徑重新執行 `python -m unittest discover -s tests/security -p test_*.py -v`，6 項通過。此為環境設定問題，未修改或放寬測試。API 全套 PostgreSQL／Redis 回歸在第三項工作已執行，39 passed、1 skipped；遠端 GitHub Actions 仍未執行。此次僅更新驗收紀錄，未改動依賴或業務程式。
 - 剩餘：M1-04 實際瀏覽器登入／租戶選擇互動，乾淨資料庫首次初始化、遠端 CI。不得為驗證乾淨資料庫刪除現有 Docker Volume；本機現有資料庫的空白初始化案例維持跳過。
+- **本輪停止條件：**官方額度為 5 小時剩餘 76%、每週剩餘 66%，未達 15% 門檻；但 M1-05 遠端 GitHub Actions 驗收需要外部 Push，屬自主循環禁止操作。瀏覽器控制目前無可用分頁，M1-04 成功登入與租戶切換尚未通過視覺互動驗收。停止建立新任務，M1 不標示完成，也不進入 M2。下一輪在使用者自行 Push 並提供 CI 結果、且瀏覽器工具可用後，先完成這兩項驗收；再核對 M1 完成條件。
 
 - 官方 Codex 額度恢復後續作：開始時 5 小時剩餘 100%、每週剩餘 84%；工作區 Git 狀態乾淨。一次性 Thread Automation `m1` 已在喚醒後刪除，避免重複執行。
 - 第十二項工作：新增 `apps/api/src/create_tenant.py` 及 PostgreSQL 整合測試；資料庫操作員可指定既有啟用 User 作為新租戶首位 admin，租戶與 Membership 在同筆交易寫入。同步 API 契約及啟動文件。未提供租戶 admin 可呼叫的全域建立租戶 API，避免任意擴張租戶。
