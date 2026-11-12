@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from .auth import AuthError, Principal, get_current_user, get_db
 from .identity_input import normalize_email, validate_new_password
 from .passwords import hash_password
+from .tenant_context import TenantContext, get_tenant_context
 
 router = APIRouter(prefix="/api/v1/tenants", tags=["租戶"])
 
@@ -93,6 +94,13 @@ def list_tenants(
     items = [TenantItem(id=row["id"], name=row["name"], role=row["role"])
              for row in rows[:50]]
     return TenantList(items=items, next_cursor=items[-1].id if len(rows) > 50 else None)
+
+
+@router.get("/current", response_model=TenantItem)
+def get_current_tenant(
+    context: TenantContext = Depends(get_tenant_context),
+) -> TenantItem:
+    return TenantItem(id=context.tenant_id, name=context.name, role=context.role)
 
 
 @router.get("/{tenant_id}", response_model=TenantItem)

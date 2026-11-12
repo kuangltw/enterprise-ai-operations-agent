@@ -68,6 +68,14 @@ def test_login_and_revocation_against_postgres(monkeypatch):
                 "id": str(own_tenant_id), "name": "合成租戶甲", "role": "staff",
             }]
             assert client.get(f"/api/v1/tenants/{own_tenant_id}", headers=headers).status_code == 200
+            current = client.get("/api/v1/tenants/current", headers={
+                **headers, "X-Tenant-ID": str(own_tenant_id),
+            })
+            assert current.status_code == 200
+            assert current.json()["role"] == "staff"
+            assert client.get("/api/v1/tenants/current", headers={
+                **headers, "X-Tenant-ID": str(other_tenant_id),
+            }).status_code == 404
             after = client.get(f"/api/v1/tenants?cursor={own_tenant_id}", headers=headers)
             assert after.status_code == 200
             assert after.json()["items"] == []
@@ -84,6 +92,9 @@ def test_login_and_revocation_against_postgres(monkeypatch):
             connection.execute(text("UPDATE tenants SET status='suspended' WHERE id=:id"),
                                {"id": str(own_tenant_id)})
             assert client.get("/api/v1/tenants", headers=headers).json()["items"] == []
+            assert client.get("/api/v1/tenants/current", headers={
+                **headers, "X-Tenant-ID": str(own_tenant_id),
+            }).status_code == 404
             assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
             assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
         finally:

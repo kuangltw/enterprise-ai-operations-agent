@@ -48,11 +48,14 @@
 |---|---|---|
 | GET | `/tenants` | 只列出目前使用者所屬且啟用的租戶，使用 UUID `cursor` 分頁，每頁最多 50 筆 |
 | GET | `/tenants/{tenant_id}` | 查詢目前使用者所屬的啟用租戶；其他租戶及不存在的租戶均回 404 |
+| GET | `/tenants/current` | 依 `X-Tenant-ID` 查詢目前選擇的啟用租戶；每次以資料庫成員資格建立可信 Tenant Context（租戶上下文） |
 | POST | `/tenants/{tenant_id}/members` | 該租戶 admin 建立新 User 與 manager、staff 或 viewer Membership；回傳 201 |
 | PATCH | `/tenants/{tenant_id}/members/{user_id}` | 該租戶 admin 變更非 admin 成員角色；回傳更新後成員 |
 | DELETE | `/tenants/{tenant_id}/members/{user_id}` | 該租戶 admin 撤銷非 admin 成員資格；回傳 204 |
 
 列表回應為 `{"items":[{"id":"<uuid>","name":"合成租戶","role":"staff"}],"next_cursor":null}`。前兩個讀取端點只供租戶選擇與呈現；後續受保護業務端點仍須重新驗證 `X-Tenant-ID` 與 Membership。
+
+`GET /tenants/current` 必須同時帶有效 JWT 與 `X-Tenant-ID`。Header 只表示選擇；後端從資料庫檢查啟用租戶及目前 User 的 Membership，其他租戶回 404，停用租戶回 404。此端點供 M1-03 的授權相依性驗證；未授權倉庫範圍仍待後續實作。
 
 新增成員請求為 `{"email":"new@example.invalid","password":"<password>","role":"staff"}`，回應包含新 User 的 `id`、`tenant_id`、正規化後的 `email` 與 `role`，不回傳密碼或雜湊。端點在同筆交易建立 User 與 Membership，鎖定呼叫者在該租戶的 admin Membership。無成員資格或租戶停用回 404，非 admin 回 403，Email 已存在回 409；不得藉此建立其他租戶的成員或新的 admin。
 
