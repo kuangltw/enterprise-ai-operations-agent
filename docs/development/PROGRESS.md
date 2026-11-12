@@ -34,6 +34,9 @@
 - M1-03 第三項：Alembic `0004_warehouse_scopes` 建立以複合外鍵綁定 Membership 的倉庫範圍表；無明確資料列即無倉庫權限，撤銷 Membership 時連動刪除。同步 Schema 文件及 PostgreSQL 跨租戶外鍵測試。提交 `4a7cddc`（`feat: 建立成員倉庫授權範圍結構`）。
 - 資料庫驗證：`docker compose build agent-migrate`、`docker compose run --rm agent-migrate` 首次及重跑均成功；API 映像重建後完整測試 36 passed、1 skipped、6 個既有棄用警告，合成資料回滾。`git diff --cached --check` 通過，Gitleaks 掃描 3 個檔案未發現機密；未新增依賴。未執行 downgrade 以免破壞現有開發資料庫。
 - 風險與下一項：ERP 位於獨立資料庫，無法對倉庫代碼做跨資料庫外鍵；授權寫入與 ERP 讀取前仍須檢查倉庫存在及租戶歸屬。提交後官方額度為 5 小時剩餘 74%、每週剩餘 80%。下一項為 Warehouse Scope 查詢與授權相依性。
+- M1-03 第四項：新增 `/tenants/current/warehouse-scopes` 分頁列表與單筆代碼檢查，先經 Tenant Context 與 `inventory.read` 角色政策，再以 `(tenant_id,user_id,warehouse_code)` 查詢明確授權；跨租戶及未授權代碼回 404。提交 `45cfccc`（`feat: 新增租戶倉庫範圍查詢與檢查`）。
+- 測試：首次完整 API 測試發現 PostgreSQL 無法推斷空 `cursor` 參數型別；改由程式在提供 cursor 時才加入參數化條件後，重建映像與重跑完整測試為 37 passed、1 skipped、6 個既有棄用警告。`git diff --cached --check` 通過，Gitleaks 掃描 5 個檔案未發現機密；未新增依賴。
+- 目前限制：倉庫授權寫入尚未提供受控操作，ERP 倉庫存在與租戶歸屬尚未驗證，現階段僅可查詢已記錄的代碼；不得視為 ERP Read API 的完整授權。提交後官方額度為 5 小時剩餘 66%、每週剩餘 79%。
 
 ## 2026-11-12 M1-02 自主開發循環
 
