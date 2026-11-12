@@ -31,6 +31,9 @@
 - 測試與安全：Docker API 映像重建、Compose PostgreSQL／Redis 完整 API 測試 29 passed、1 skipped、6 個既有棄用警告；`git diff --cached --check` 通過，Gitleaks 掃描 5 個暫存檔未發現機密；未新增依賴。提交後官方額度為 5 小時剩餘 85%、每週剩餘 82%，可繼續 Role Policy。
 - M1-03 第二項：建立 `Role Policy` 與可重用的 `require_permission` 相依性，會員管理端點也改採同一政策。角色矩陣依安全規格實作，未知角色及未知權限一律拒絕。ACL、倉庫範圍與職責分離尚須另行檢查。提交 `c7b8a86`（`feat: 新增可重用角色授權政策`）。
 - 驗證：API 映像重建與 Compose PostgreSQL／Redis 完整測試 35 passed、1 skipped、6 個既有棄用警告；暫存差異檢查通過，Gitleaks 掃描 4 個檔案未發現機密。無新增依賴。提交後官方額度為 5 小時剩餘 80%、每週剩餘 81%；下一項為倉庫資料範圍的 Schema 與授權檢查。
+- M1-03 第三項：Alembic `0004_warehouse_scopes` 建立以複合外鍵綁定 Membership 的倉庫範圍表；無明確資料列即無倉庫權限，撤銷 Membership 時連動刪除。同步 Schema 文件及 PostgreSQL 跨租戶外鍵測試。提交 `4a7cddc`（`feat: 建立成員倉庫授權範圍結構`）。
+- 資料庫驗證：`docker compose build agent-migrate`、`docker compose run --rm agent-migrate` 首次及重跑均成功；API 映像重建後完整測試 36 passed、1 skipped、6 個既有棄用警告，合成資料回滾。`git diff --cached --check` 通過，Gitleaks 掃描 3 個檔案未發現機密；未新增依賴。未執行 downgrade 以免破壞現有開發資料庫。
+- 風險與下一項：ERP 位於獨立資料庫，無法對倉庫代碼做跨資料庫外鍵；授權寫入與 ERP 讀取前仍須檢查倉庫存在及租戶歸屬。提交後官方額度為 5 小時剩餘 74%、每週剩餘 80%。下一項為 Warehouse Scope 查詢與授權相依性。
 
 ## 2026-11-12 M1-02 自主開發循環
 
