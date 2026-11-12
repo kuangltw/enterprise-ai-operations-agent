@@ -1,18 +1,19 @@
-# API Contract v0.1
+# API Contract（API 介面契約）v0.1
 
-> Planned REST/SSE API specification. No endpoints are implemented as of 2026-11-12. Base path: `/api/v1`.
+> 本文件為預定規格；截至 2026-11-12 尚未實作任何 Endpoint（端點）。
 
-## Global conventions
+## 1. 共通規範
 
-- Authorization: `Authorization: Bearer <JWT>`.
-- Tenant selection: `X-Tenant-ID: <uuid>`; server verifies active membership. Header is **not** an authorization grant.
-- Correlation: `X-Request-ID: <uuid>`; every request has a trace ID.
-- Mutating async requests: `Idempotency-Key: <uuid>`; enforce scope, payload fingerprint and unique constraint.
-- Use UTC ISO 8601, UUID identifiers, JSON Decimal strings for money and quantities; paginated list responses have `items` and `next_cursor`.
-- Errors: consistent typed error envelope; do not expose cross-tenant resource existence.
-- Permission scope includes user role, document ACL and authorized warehouses; role alone is insufficient.
+- 對外 Base Path（基本路徑）：`/api/v1`。
+- `Authorization: Bearer <JWT>`：使用者驗證。
+- `X-Tenant-ID: <uuid>`：選擇租戶；後端必須驗證成員資格，Header 不等於授權。
+- `X-Request-ID: <uuid>`：Trace Correlation（追蹤關聯）。
+- `Idempotency-Key: <uuid>`：非同步建立與高風險交易防重複。
+- 時間使用 ISO 8601 UTC、ID 使用 UUID、金額與精確數量在 JSON 中使用十進位字串。
+- List API（列表介面）使用 `items` 與 `next_cursor` 分頁。
+- 授權條件同時包含 Tenant、Role（角色）、文件 ACL 與倉庫範圍。
 
-### Error envelope
+### 統一錯誤格式
 
 ```json
 {
@@ -25,112 +26,148 @@
 }
 ```
 
-Status policy: 400 invalid input; 401 unauthenticated; 403 forbidden; 404 not found/inaccessible; 409 conflict; 422 schema validation; 429 rate limit; 503 dependency unavailable.
+狀態碼：400 參數錯誤、401 未登入、403 無權限、404 不存在或不可存取、409 衝突、422 Schema 驗證失敗、429 速率限制、503 依賴服務不可用。
 
-## Document/knowledge endpoints
+## 2. SOP Knowledge（知識庫）API
 
-| Method | Endpoint | Purpose | Authorization |
+| Method | Endpoint | 功能 | 權限 |
 |---|---|---|---|
-| POST | `/documents` | Multipart upload, async ingestion | staff+ |
-| GET | `/documents` | Paginated accessible document list | membership + ACL |
-| GET | `/documents/{id}` | Document metadata | ACL |
-| GET | `/documents/{id}/status` | Indexing state | ACL |
-| POST | `/documents/{id}/versions` | Upload replacement version | owner/manager/admin |
-| POST | `/knowledge/search` | ACL-filtered search | membership + ACL |
-| POST | `/knowledge/ask` | Evidence-backed answer | membership + ACL |
-| DELETE | `/documents/{id}` | Logical deletion | owner/admin |
+| POST | `/documents` | 上傳文件並建立非同步索引任務 | staff 以上 |
+| GET | `/documents` | 列出可存取文件 | 成員 + ACL |
+| GET | `/documents/{id}` | 文件 Metadata（中繼資料） | ACL |
+| GET | `/documents/{id}/status` | 查看索引狀態 | ACL |
+| POST | `/documents/{id}/versions` | 上傳新版本 | Owner / manager / admin |
+| POST | `/knowledge/search` | ACL 篩選檢索 | 成員 + ACL |
+| POST | `/knowledge/ask` | 產生附來源引用的回答 | 成員 + ACL |
+| DELETE | `/documents/{id}` | 邏輯刪除 | Owner / admin |
 
-Example request `POST /knowledge/ask`:
+`POST /knowledge/ask` Request（請求）：
 
 ```json
 {"question":"商品缺貨時的採購處理規範是什麼？","top_k":5}
 ```
 
-Example `200` response (placeholder IDs denote UUIDs in actual implementation):
+Response（回應）200：
 
 ```json
 {
-  "answer":"依採購規範，應先確認現有庫存及待入庫量。",
-  "citations":[{"document_id":"<uuid>","version":2,"chunk_id":"<uuid>","page":3,"quote":"缺貨商品應先確認可用庫存...","score":0.91}],
-  "evidence_status":"supported",
-  "trace_id":"trace-example"
+  "answer": "依採購規範，應先確認現有庫存及待入庫數量。",
+  "citations": [
+    {
+      "document_id": "<uuid>",
+      "version": 2,
+      "chunk_id": "<uuid>",
+      "page": 3,
+      "quote": "缺貨商品應先確認可用庫存...",
+      "score": 0.91
+    }
+  ],
+  "evidence_status": "supported",
+  "trace_id": "trace-example"
 }
 ```
 
-Insufficient evidence: `{"answer":"目前知識庫沒有足夠資料可以確認。","citations":[],"evidence_status":"insufficient"}`. Citation `score` is not a calibrated confidence probability.
+資料不足：`evidence_status = "insufficient"`，`citations = []`。Score（排序分數）不等於經校準的回答正確率。
 
-## Agent execution endpoints
+## 3. Agent Run（執行）API
 
-| Method | Endpoint | Purpose |
+| Method | Endpoint | 用途 |
 |---|---|---|
-| POST | `/agent/threads` | Create conversation thread |
-| POST | `/agent/runs` | Create asynchronous run |
-| GET | `/agent/runs/{id}` | Read run status and output |
-| GET | `/agent/runs/{id}/events` | Authenticated SSE stream |
-| POST | `/agent/runs/{id}/cancel` | Request cancellation |
-| GET | `/agent/runs/{id}/trace` | Authorized summarized event trace |
+| POST | `/agent/threads` | 建立對話 |
+| POST | `/agent/runs` | 建立非同步 Agent Run |
+| GET | `/agent/runs/{id}` | 查詢結果與狀態 |
+| GET | `/agent/runs/{id}/events` | SSE（伺服器推送事件） |
+| POST | `/agent/runs/{id}/cancel` | 要求取消 |
+| GET | `/agent/runs/{id}/trace` | 查詢執行節點摘要 |
 
-`POST /agent/runs`:
+`POST /agent/runs`：
 
 ```json
-{"thread_id":"<uuid>","message":"分析最近30天缺貨商品，產生採購建議","context":{"warehouse_ids":["WH-001"],"period_days":30}}
+{
+  "thread_id": "<uuid>",
+  "message": "分析最近30天缺貨商品，產生採購建議",
+  "context": {"warehouse_ids": ["WH-001"], "period_days": 30}
+}
 ```
 
-`202 Accepted`:
+回傳 `202 Accepted`：
+
 ```json
-{"run_id":"<uuid>","status":"queued","events_url":"/api/v1/agent/runs/<uuid>/events"}
+{
+  "run_id": "<uuid>",
+  "status": "queued",
+  "events_url": "/api/v1/agent/runs/<uuid>/events"
+}
 ```
 
-Use event IDs for resumption where supported; redact event payloads; do not leak traces across users. Cancel is best-effort and cannot roll back already committed ERP writes.
+`cancel` 是 Best-effort（盡力取消），不能復原 ERP 已提交交易。SSE 與 Trace 同樣需要使用者授權。
 
-## ERP internal tool contract (not publicly exposed)
+## 4. Demo ERP Tool Contract（工具契約）
 
-| Tool | Method/path | Side effect |
+**使用 C# + ASP.NET Core Web API 實作**，由 Python Agent 的 Tool Adapter（工具轉接器）以 HTTP 呼叫。ERP 內部端點不直接暴露於公網。建議使用 ASP.NET Core Controllers 或 Minimal API；正式選型於 M3 決定，OpenAPI Contract 優先。
+
+| Tool Name | ERP Method / Path | 類型 |
 |---|---|---|
-| inventory.list_low_stock | GET `/internal/inventory/low-stock` | read |
-| inventory.get_snapshot | GET `/internal/inventory/snapshot` | read |
-| sales.get_summary | GET `/internal/sales/summary` | read |
-| purchase.get_open_orders | GET `/internal/purchases/open` | read |
-| purchase.simulate | POST `/internal/purchases/simulate` | deterministic, read-only |
-| purchase.create_order | POST `/internal/purchases` | write, strictly approval-gated |
+| `inventory.list_low_stock` | GET `/internal/inventory/low-stock` | 讀取 |
+| `inventory.get_snapshot` | GET `/internal/inventory/snapshot` | 讀取 |
+| `sales.get_summary` | GET `/internal/sales/summary` | 讀取 |
+| `purchase.get_open_orders` | GET `/internal/purchases/open` | 讀取 |
+| `purchase.simulate` | POST `/internal/purchases/simulate` | 只讀模擬 |
+| `purchase.create_order` | POST `/internal/purchases` | 受核准控管寫入 |
+| `purchase.get_by_idempotency_key` | GET `/internal/purchases/by-idempotency-key/{key}` | 寫入對帳 |
 
-Every tool declares: input/output JSON schema, required permission, scope, timeout, allowed retries, maximum result size and auditing. ERP endpoints recheck authorization and never accept unbounded SQL.
+每個 Tool 必須定義 Input/Output Schema（輸入輸出結構）、授權、Timeout（逾時）、Retry（重試）、大小限制與 Audit（稽核）。ERP 端也必須獨立驗證內部服務身分及授權上下文，禁止任意 SQL。
 
-Sample `inventory.get_snapshot` input:
+庫存快照範例：
+
 ```json
-{"warehouse_id":"WH-001","sku":"SKU-10001"}
+{
+  "sku": "SKU-10001",
+  "warehouse_id": "WH-001",
+  "on_hand": "120",
+  "reserved": "35",
+  "available": "85",
+  "incoming": "40",
+  "version": 18,
+  "as_of": "2026-11-12T10:00:00Z"
+}
 ```
 
-Output:
-```json
-{"sku":"SKU-10001","warehouse_id":"WH-001","on_hand":"120","reserved":"35","available":"85","incoming":"40","version":18,"as_of":"2026-11-12T10:00:00Z"}
-```
+`reserved` 與 `backorders` 的定義必須在 M3 確認，避免補貨公式重複扣除已承諾數量。C# 端金額／數量使用 `decimal` 而非 `double`。
 
-**Terminology invariant:** specify if `reserved` equals outstanding demand; avoid deducting the same committed quantity again as `backorders`. Record snapshot/source versions in analysis results.
+## 5. 採購及人工核准 API
 
-## Purchase/approval endpoints
-
-| Method | Endpoint | Purpose |
+| Method | Endpoint | 用途 |
 |---|---|---|
-| GET | `/purchase-drafts` | Authorized list |
-| GET | `/purchase-drafts/{id}` | Draft with evidence and calculations |
-| POST | `/purchase-drafts/{id}/submit` | Submit frozen version for approval |
-| GET | `/approvals` | Current user's eligible pending approvals |
-| POST | `/approvals/{id}/decision` | Approve or reject |
-| GET | `/erp-actions/{id}` | Execution/reconciliation state |
+| GET | `/purchase-drafts` | 採購草稿列表 |
+| GET | `/purchase-drafts/{id}` | 明細與來源依據 |
+| POST | `/purchase-drafts/{id}/submit` | 凍結版本並送審 |
+| GET | `/approvals` | 待審清單 |
+| POST | `/approvals/{id}/decision` | 核准／駁回 |
+| GET | `/erp-actions/{id}` | ERP 寫入狀態及對帳 |
 
-Approval request:
+核准 Request：
+
 ```json
-{"decision":"approve","expected_draft_version":3,"note":"補貨需求確認"}
+{
+  "decision": "approve",
+  "expected_draft_version": 3,
+  "note": "補貨需求確認"
+}
 ```
 
-`202 Accepted`:
+Response `202 Accepted`：
+
 ```json
-{"approval_id":"<uuid>","status":"approved","erp_action_status":"pending"}
+{
+  "approval_id": "<uuid>",
+  "status": "approved",
+  "erp_action_status": "pending"
+}
 ```
 
-Approval is an authorization decision only; ERP commit occurs asynchronously. Under DB transaction: lock draft + approval, check actor permission / separation of duties / version, commit decision and outbox event. A worker then performs revalidation and guarded write. Unknown write results must be reconciled by idempotency key.
+核准不代表 ERP 已建立採購單。核准時需在資料庫 Transaction（交易）中鎖定草稿、驗證權限與版本、寫入決策及 Outbox Event；Worker 重新驗證資料後才執行 ERP Write API。未知結果先依固定冪等鍵對帳。
 
-## Planned OpenAPI verification
+## 6. Contract Test（契約測試）
 
-Use FastAPI-generated `/openapi.json` as executable API schema, snapshot/validate in CI and keep examples in this document synchronized with the implementation. All DTOs require Pydantic validation; reject unknown action names, unexpected warehouse IDs, invalid currency/quantity, oversized payloads.
+FastAPI 與 ASP.NET Core 均應產生 OpenAPI 文件，並在 CI 比對契約；測試跨語言 Decimal 字串、UUID、版本衝突、授權錯誤及冪等語意。所有外部參數需進行 DTO（資料傳輸物件）驗證。
