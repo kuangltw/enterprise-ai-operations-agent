@@ -47,6 +47,8 @@
 - M1-04 首項：React 提供登入、登出、租戶選擇、受保護功能概覽與 API 錯誤處理；JWT 僅存記憶體，不寫入 Local Storage。租戶列表依 Cursor 取完所有頁，選擇租戶時再次呼叫受保護的 `/tenants/current`。Nginx 對 `/api/` 使用同源固定代理。提交 `70050e6`（`feat: 建立登入與租戶選擇前端`）。
 - 驗證：`docker compose build web` 的 TypeScript 與 Vite 建置通過；`docker compose config --quiet` 通過；`docker compose up -d web` 啟動成功，本機 HTTP 首頁回 200。前端代理 `/api/v1/auth/me` 回 503，原因是本機 Compose JWT 金鑰尚未設定為有效值，符合後端安全預期，未用真實憑證測試。瀏覽器工具找不到設定的 Chrome 可執行檔，UI 互動與視覺驗收未執行。`git diff --cached --check` 通過，Gitleaks 掃描 7 個檔案未發現機密；未新增依賴。
 - 官方額度：提交後 5 小時剩餘 38%、每週剩餘 75%。下一項為 M1-05 Contract／安全／CI 整合驗收；前端登入成功路徑尚需瀏覽器驗證。
+- M1-05 首項：統一 FastAPI 請求驗證錯誤為既定 `error` 格式，422 回 `VALIDATION_ERROR` 且不回傳輸入原文，並更新 API 契約與測試。提交 `9a3790f`（`feat: 統一請求驗證錯誤格式`）。
+- 驗證：Docker API 映像重建後完整 PostgreSQL／Redis 測試 39 passed、1 skipped、6 個既有棄用警告；暫存差異與 Gitleaks 3 個檔案掃描通過，無新增依賴。提交後官方額度為 5 小時剩餘 30%、每週剩餘 74%。下一項為 CI 整合測試工作。
 
 ## 2026-11-12 M1-02 自主開發循環
 
