@@ -1,6 +1,6 @@
 # PostgreSQL 資料庫 Schema（結構）規格 v0.1
 
-> **整體仍為設計規格。** M1 的 `tenants`、`users`、`memberships` 與 Demo ERP 商品、倉庫、庫存資料表已有初始 Migration，並於 2026-11-12 在本機 PostgreSQL 驗證；其餘資料表仍未實作。詳見 [M1-01 驗證紀錄](../development/M1-01-VERIFICATION.md)。建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
+> **整體仍為設計規格。** M1 的 `tenants`、`users`、`memberships`、`sessions` 與 Demo ERP 商品、倉庫、庫存資料表已有 Migration；初始資料表於 2026-11-12 在本機 PostgreSQL 驗證。其餘資料表仍未實作。詳見 [M1-01 驗證紀錄](../development/M1-01-VERIFICATION.md) 與 [開發進度](../development/PROGRESS.md)。建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
 
 ## 1. 資料庫邊界
 
@@ -15,6 +15,7 @@
 erDiagram
  TENANTS ||--o{ MEMBERSHIPS : "包含"
  USERS ||--o{ MEMBERSHIPS : "參與"
+ USERS ||--o{ SESSIONS : "登入"
  TENANTS ||--o{ DOCUMENTS : "擁有"
  DOCUMENTS ||--o{ DOCUMENT_VERSIONS : "版本"
  DOCUMENTS ||--o{ DOCUMENT_ACL : "權限"
@@ -57,9 +58,21 @@ CREATE TABLE memberships (
     CHECK (role IN ('admin','manager','staff','viewer')),
   PRIMARY KEY (tenant_id,user_id)
 );
+
+CREATE TABLE sessions (
+  id uuid PRIMARY KEY,
+  user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  expires_at timestamptz NOT NULL,
+  revoked_at timestamptz,
+  CONSTRAINT ck_sessions_expires_after_creation CHECK (expires_at > created_at),
+  CONSTRAINT ck_sessions_revoked_after_creation CHECK (revoked_at IS NULL OR revoked_at >= created_at)
+);
+
+CREATE INDEX ix_sessions_user_expires ON sessions(user_id, expires_at);
 ```
 
-正式實作要定義 Email 正規化、登入 Session（工作階段）撤銷、停權與權限變更稽核。
+`sessions.id` 將作為 JWT 的 `jti`，每次受保護請求須檢查工作階段未撤銷且未過期。Email 正規化、停權與權限變更稽核仍待實作。
 
 ## 4. Knowledge（文件與索引）
 
