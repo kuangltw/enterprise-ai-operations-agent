@@ -7,13 +7,13 @@
 | M1-01 環境驗證 | 本機已完成 | [驗證紀錄](M1-01-VERIFICATION.md) |
 | 本機 Git 機密防護 | 本機已完成 | 2026-11-12 隔離 Repository 提交測試 6 項通過；安全修正 `141ffae9f35f91ecde0e16060ac10d9447d186f0` |
 | M1-02 身分驗證與租戶管理 | 本機功能完成，整合驗收待 M1-05 | 密碼雜湊、JWT、Session、首次建帳、受控新租戶、成員管理及全域停權已有測試；空白資料庫初始化案例在既有資料庫跳過 |
-| M1-03 RBAC 與租戶隔離 | 進行中 | 已實作由 JWT、`X-Tenant-ID` 與資料庫 Membership 建立的 Tenant Context；RBAC 與 Warehouse Scope 待完成 |
-| M1-04 React 登入與管理介面 | 待開始 | 尚未實作 |
+| M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
+| M1-04 React 登入與管理介面 | 本機建置完成，瀏覽器驗收待執行 | 登入、登出、租戶選擇、受保護畫面與 API 錯誤處理已實作；目前瀏覽器工具不可用 |
 | M1-05 CI 與整合驗收 | 待開始 | 尚未實作 |
 
 ## 下一個任務
 
-1. 繼續 M1-03，先實作可重用的 Role Policy（角色政策）及權限相依性，再處理 Warehouse Scope（倉庫資料範圍）。
+1. 繼續 M1-05，先補全 M1 Contract Test（契約測試）與 CI，再完成 Docker Compose、安全及前端驗收。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
 ## 2026-11-13 自動續作
@@ -44,6 +44,9 @@
 - 測試：Docker API 映像重建後完整測試 38 passed、1 skipped、6 個既有棄用警告；合成登錄資料回滾。`git diff --cached --check` 通過，Gitleaks 掃描 3 個檔案未發現機密，無新增依賴。未對真實 ERP 倉庫執行登錄。提交後官方額度為 5 小時剩餘 55%、每週剩餘 77%。下一項為 admin 分配成員倉庫 Scope 的 API。
 - M1-03 第七項：租戶 admin 可對本租戶現有成員 `PUT`／`DELETE` 已登錄的倉庫 Scope；不接受未登錄代碼、其他租戶或非 admin，重複授予安全，撤銷 Membership 時 Scope 連動清除。同步 API 契約與 OpenAPI 路徑測試。提交 `b945c0c`（`feat: 允許管理員分配已登錄倉庫範圍`）。
 - 驗證：Docker API 映像重建後完整測試 38 passed、1 skipped、6 個既有棄用警告；`git diff --cached --check` 通過，Gitleaks 掃描 4 個暫存檔未發現機密，無新增依賴。提交後官方額度為 5 小時剩餘 48%、每週剩餘 76%。M1-03 的本機身分、角色、租戶與倉庫 Scope 基礎已實作；ERP 實際存取點複驗須於 M3 完成。
+- M1-04 首項：React 提供登入、登出、租戶選擇、受保護功能概覽與 API 錯誤處理；JWT 僅存記憶體，不寫入 Local Storage。租戶列表依 Cursor 取完所有頁，選擇租戶時再次呼叫受保護的 `/tenants/current`。Nginx 對 `/api/` 使用同源固定代理。提交 `70050e6`（`feat: 建立登入與租戶選擇前端`）。
+- 驗證：`docker compose build web` 的 TypeScript 與 Vite 建置通過；`docker compose config --quiet` 通過；`docker compose up -d web` 啟動成功，本機 HTTP 首頁回 200。前端代理 `/api/v1/auth/me` 回 503，原因是本機 Compose JWT 金鑰尚未設定為有效值，符合後端安全預期，未用真實憑證測試。瀏覽器工具找不到設定的 Chrome 可執行檔，UI 互動與視覺驗收未執行。`git diff --cached --check` 通過，Gitleaks 掃描 7 個檔案未發現機密；未新增依賴。
+- 官方額度：提交後 5 小時剩餘 38%、每週剩餘 75%。下一項為 M1-05 Contract／安全／CI 整合驗收；前端登入成功路徑尚需瀏覽器驗證。
 
 ## 2026-11-12 M1-02 自主開發循環
 
