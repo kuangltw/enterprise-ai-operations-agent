@@ -9,11 +9,11 @@
 | M1-02 身分驗證與租戶管理 | 本機功能完成，整合驗收待 M1-05 | 密碼雜湊、JWT、Session、首次建帳、受控新租戶、成員管理及全域停權已有測試；空白資料庫初始化案例在既有資料庫跳過 |
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
-| M1-05 CI 與整合驗收 | 本機驗收進行中，遠端 CI 未驗證 | API、提交前安全測試、依賴稽核、Compose、Migration 與 4 項 Playwright E2E 有本機結果；新增的 CI E2E Job 尚未遠端執行 |
+| M1-05 CI 與整合驗收 | 本機及遠端 CI 已執行，單次登出 500 根因未確認 | `6af29ac` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本機 E2E 多輪通過，仍保留間歇性風險 |
 
 ## 下一個任務
 
-1. 繼續 M1-05：登出 500 已針對性重跑但未重現，若再發生應依 API 例外類型追查；取得使用者明確核准後才可 Push，並依遠端 GitHub Actions 結果完成驗收。
+1. 繼續 M1-05：登出 500 已針對性重跑但未重現；若再發生應依 API 例外類型追查。核對其餘 M1 完成條件後再決定是否標示完成，不進入 M2。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
 ## 2026-11-13 自動續作
@@ -24,6 +24,8 @@
 - M1 驗收尚未完成：遠端 Python、C#、React、Compose、Secret Scan、Playwright Job 未就本次 E2E Commit 取得結果；乾淨資料庫初始化案例在既有資料庫跳過，隔離 E2E 已驗證 Alembic 建立新資料庫。間歇性登出 500 須持續追查，不得視為已修復。
 - 遠端唯讀核對：`origin/main` 的 `58213d1` 已有 [M1 建置工作](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43316334610)與[機密掃描工作](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43316334596)成功結果；前者的 Python、dotnet、frontend、compose 四個 Job 均成功，後者的 Gitleaks Job 成功。這些結果不包含本輪新增的 E2E Job 與本機待推送 Commit。
 - 間歇性登出 500 追查：執行器新增可轉交 Playwright 參數，提交 `79799b7`（`test: 支援隔離環境重複執行 Playwright 案例`）；以 `--grep=API --repeat-each=4` 在隔離資料庫重跑跨租戶與登出案例，4 passed，未再出現 500。`git diff --cached --check` 與 Gitleaks 暫存區 2 個檔案掃描、Hook 再掃描通過。原因尚未確定，不宣稱已修復；提交後官方額度為 5 小時剩餘 45%、每週剩餘 62%。
+- 追加追查：在六個新建的隔離環境重跑完整 Playwright E2E，各為 4 passed；測試容器均已清理。檢視 Session CHECK、JWT 驗證、登出更新與 Tenant Context，未找到可確認的一次性 500 根因；原失敗容器已清理，沒有該次 API Traceback 可供還原。未以重試或放寬驗證掩蓋問題。官方額度檢查為 5 小時剩餘 38%、每週剩餘 61%。
+- 遠端追蹤分支在本輪期間由外部更新至 `6af29ac`，本代理未執行 Push。[M1 CI](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43319565777)的 Python、dotnet、frontend、compose、e2e 均成功，E2E Log 為 4 passed；[Gitleaks](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43319565690)成功。遠端亦未重現 500，但不能據此宣稱缺陷已修復。
 
 - 本輪重新查詢官方額度：開始時 5 小時剩餘 98%、每週剩餘 70%；Git 工作區乾淨。瀏覽器控制工具僅回報空的 MCP Apps 分頁及原生 app-server 啟動失敗，Chrome DevTools 也找不到瀏覽器，因此 M1-04 互動驗收尚未執行。
 - M1-05 第三項：受保護 API 於 OpenAPI 宣告 HTTP Bearer Security Scheme，並以 Contract Test 檢查登入端點公開、受保護端點需 Bearer；另驗證錯誤格式的憑證仍回 401。同步 API 契約文件。提交 `46a62bd`（`test: 補齊 Bearer 驗證的 OpenAPI 契約`）。

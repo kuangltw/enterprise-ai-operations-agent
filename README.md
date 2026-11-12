@@ -80,7 +80,7 @@ python scripts/security/check_staged_secrets.py
 
 ## 專案狀態與使用限制
 
-- 目前可用 `docker compose up -d` 啟動 M1 基礎環境；身分驗證、租戶隔離與 React 登入流程已完成本機測試，M1 遠端 CI 及完整系統仍未通過驗收，業務 API 尚未實作。
+- 目前可用 `docker compose up -d` 啟動 M1 基礎環境；身分驗證、租戶隔離與 React 登入流程已完成本機測試，M1 遠端 CI 已執行。單次登出 500 的原因仍未確認，完整系統尚未通過驗收，業務 API 尚未實作。
 - 未完成安全、交易一致性及 E2E（端對端）測試前，不可接入真實採購交易。
 - 所有展示資料必須為 Synthetic Data（合成資料），禁止提交真實企業資料、個資與密鑰。
 - 本專案採用 Apache License 2.0（Apache 2.0 開源授權），詳見 [LICENSE](LICENSE)；第三方套件與整合服務仍須依各自授權條款評估。

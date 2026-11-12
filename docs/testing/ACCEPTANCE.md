@@ -116,8 +116,8 @@ ASP.NET Core Demo ERP 需具備 Transaction（交易）、Unique Constraint（�
 | FastAPI Unit／Integration／Contract Test | PostgreSQL／Redis 完整測試 39 passed、1 skipped；OpenAPI Bearer 與錯誤格式已有契約測試 | 空白資料庫初始化案例因既有資料庫非空而跳過；隔離 E2E 的 Alembic 已在新建資料庫套用 |
 | 提交前安全測試 | 6 passed；暫存區 Gitleaks 與待推送 Commit 範圍掃描均未發現機密 | 本機 Hook 須於其他電腦另行啟用 |
 | 依賴安全稽核 | Python `pip-audit` 未發現已知漏洞；npm audit 回報 0 個漏洞 | Python 依賴未鎖定完整轉接版本；MinIO 第三方 ECR 映像來源仍待評估 |
-| Compose 與建置 | Alembic 重跑、API／Web／Demo ERP 建置、本機 HTTP 就緒與未登入 401 通過 | 遠端 Compose Job 在基準 `58213d1` 成功；最新 HEAD 尚未驗證 |
-| Playwright Test | 獨立 tmpfs 資料庫、合成帳號，Headless Chromium 4 passed；涵蓋登入、錯誤密碼、租戶切換、跨租戶拒絕及登出 | 曾一次登出回 500，後續未重現；新增的遠端 E2E Job 未執行 |
-| GitHub Actions | 遠端 `58213d1` 的 [M1 建置](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43316334610)四個 Job 與[機密掃描](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43316334596)均成功 | 本次 E2E Commit 尚未 Push；Playwright Job 與最新文件未經遠端驗證，不能宣稱目前 HEAD 的 CI 通過 |
+| Compose 與建置 | Alembic 重跑、API／Web／Demo ERP 建置、本機 HTTP 就緒與未登入 401 通過；遠端 `6af29ac` 的 Compose Job 成功 | 既有開發資料庫的空白初始化案例維持跳過 |
+| Playwright Test | 獨立 tmpfs 資料庫、合成帳號；六個新的本機環境各 4 passed，遠端 E2E 4 passed，涵蓋登入、錯誤密碼、租戶切換、跨租戶拒絕及登出 | 曾一次登出回 500，後續未重現，根因未確認 |
+| GitHub Actions | 遠端 `6af29ac` 的 [M1 建置](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43319565777)五個 Job 與[機密掃描](https://github.com/kuangltw/enterprise-ai-operations-agent/actions/runs/43319565690)均成功 | CI 成功不構成單次 500 已修復的證據 |
 
-因此 **M1 尚未達到完成條件**。先追查間歇性登出 500；取得明確核准後推送至指定分支，再以實際 GitHub Actions 結果核對所有 Job。隔離 E2E 的合成密碼及金鑰於每次執行時產生，不提交 Git，也不輸出至公開 Log；測試容器與網路在結束時清理，不刪除現有 Docker Volume。
+因此 **M1 尚未標示完成**：單次登出 500 的根因未確認，須在其餘完成條件複核時列為風險。隔離 E2E 的合成密碼及金鑰於每次執行時產生，不提交 Git，也不輸出至公開 Log；測試容器與網路在結束時清理，不刪除現有 Docker Volume。
