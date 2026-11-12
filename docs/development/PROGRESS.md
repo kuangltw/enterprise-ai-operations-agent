@@ -31,7 +31,7 @@
   8. Citation（來源引用）：文件版本、區塊、頁碼與原文驗證。
   9. RAG Evaluation（檢索評估）：固定合成／公開資料集、Recall@5、引用正確率及拒答率。
 - M2 首項實作：`apps/api/migrations/versions/0006_documents.py` 建立文件、版本、ACL 與同租戶複合外鍵；`apps/api/tests/test_documents_postgres.py` 驗證跨租戶版本／ACL 拒絕及 `current_version` 必須指向現有版本。隔離 tmpfs PostgreSQL 從空白套用 Alembic 至 head，並執行文件及登出整合測試共 **3 passed、1 warning**；容器已清理。`ready` 後發布、Owner 同租戶成員資格、SHA256 去重、上傳、MinIO、解析、索引及問答仍為規劃中，禁止提前開放對外 API。此項提交 SHA 以本輪 Git 紀錄為準。
-- 無法可靠取得官方剩餘額度時，本輪至此完成 M1 驗收與 M2 首項兩項小任務；依停止政策不再啟動新工作，須由主人確認剩餘額度後再繼續。
+- 本輪結束時官方額度工具回報 5 小時視窗已用 85%（剩餘 **15%**）、每週已用 43%（剩餘 57%）。已達 ≤15% 停止門檻，不再啟動新工作；待額度恢復後再繼續 M2。未使用額度重設點數。
 
 ## 2026-11-13 自動續作
 
