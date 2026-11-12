@@ -62,5 +62,5 @@ docker compose down -v
 - 登錄倉庫代碼僅供資料庫操作員執行：`docker compose run --rm api python -m src.register_warehouse`。操作員須先在 ERP 核對倉庫代碼及實際租戶歸屬，再輸入啟用租戶 ID、代碼及 `REGISTER` 確認。資料庫會拒絕同一代碼登錄至其他租戶；此指令本身無法跨資料庫驗證 ERP 資料，禁止把未核實的代碼當成已授權倉庫。
 - C# ERP 只有商品、倉庫與庫存初始資料模型，尚未實作銷售、採購、實際業務工具 API。
 - EF Core 的啟動自動 Migration 只用於本機 Demo；正式環境改以專用部署 Job 執行。
-- React 前端目前僅有靜態 M1 首頁，尚未接入 API 或登入流程。
+- React 前端已提供登入、登出、租戶選擇及受保護工作區入口；API 透過同源 Nginx `/api/` 代理呼叫。JWT 只保留在頁面記憶體，重新整理需重新登入。四項業務功能卡片仍標示規劃中，尚無實際業務操作頁面。
 - 跨服務 Contract Test（契約測試）、完整身分驗證驗收、租戶隔離與安全測試仍未執行；GitHub Actions CI 尚未在遠端執行驗證。

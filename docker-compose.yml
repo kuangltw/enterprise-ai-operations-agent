@@ -5,6 +5,9 @@ services:
       context: ./apps/web
     ports:
       - "127.0.0.1:5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
     networks: [internal]
 
   agent-db:
