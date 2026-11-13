@@ -14,19 +14,18 @@
 
 ## 下一個任務
 
-1. M2-01 繼續退役鍵登錄與 Dry Run 預覽：先核對未提交差異，完成降版修正後測試及 Sol 安全重驗。第一切片已提交 `7c61e1444a0d4b3275ffbdfc4606c0b963375419`。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
+1. M2-01 第三階段：退役鍵切換、可控孤兒物件清理（Dry Run、實際刪除與授權檢查分離，並在 `complete_document_upload` 防範已退役鍵復活），以及故障注入與並行回歸測試。第一切片已提交 `7c61e1444a0d4b3275ffbdfc4606c0b963375419`，第二切片已由 agy 完成驗證與獨立安全審查（本切片 Commit SHA 以 Git 紀錄為準）。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
-## 2026-11-13 Codex → agy 交接
+## 2026-11-13 M2-01 退役鍵預覽（agy 接手驗證完成）
 
-- Codex 五小時額度剩餘 14%，交接給 agy。第一切片已提交；第二切片未完成，仍有未提交修改。詳細狀態、驗證限制與接手步驟見 [HANDOFF.md](HANDOFF.md)。
-
-## 2026-11-13 M2-01 退役鍵預覽（未完成，額度停止）
-
-- 第二切片新增未提交的 `0010_document_retired_keys.py`、`document_cleanup_preview.py` 與 `test_document_cleanup_preview_postgres.py`，只建立退役鍵資料表及指定租戶的唯讀候選預覽；未切換鍵、連接 MinIO 或刪除物件。預覽可能包含進行中的上傳，不能作為刪除授權。
-- 初評命中跨系統一致性、資料刪除設計、交易鎖、並行、復原及租戶隔離強制條件；Migration／資料約束 +2、未影響三個產品模組或重要 API +0、規格經設計後明確 +0，總分 2，仍須升級。Architect 與 Security Reviewer 的 Sol High 前置設計及差異審查已完成。
-- 首版在隔離 tmpfs PostgreSQL 從空白套用 Migration 至 `0010`，預覽及上傳／ACL 六個測試檔 **10 passed、1 warning**。兩位審查者發現降版空表檢查與刪表之間可並行插入，屬提交阻擋；已改為同交易先取得排他鎖，Architect 靜態重驗通過。非空降版測試已配合 PostgreSQL 例外改用儲存點，但修正後測試、Security Reviewer 重驗及完整差異重評尚未執行。實際並行降版及離線 SQL 亦未驗證。
-- 官方五小時額度剩餘 14%，依停止政策不再啟動新工作。以上三個新檔及本進度檔保留未提交；尚未執行本切片 Gitleaks 或建立 Commit。下次先檢查額度、工作目錄與差異，再重跑隔離測試，完成安全重驗、文件更新、暫存掃描及提交。退役鍵實際切換、延遲 PUT／DELETE 對帳和孤兒清理均未實作。
+- agy 接手後核對 `HANDOFF.md` 與 Git 狀態（基準 HEAD `9fa837b`，三個未追蹤第二切片檔案完整保留），在隔離 tmpfs PostgreSQL 與 MinIO（合成資料）完成修正後驗證：
+  - `alembic upgrade head` 套用至 `0010_document_retired_keys` 成功；`alembic downgrade 0010_document_retired_keys:0009_document_index_jobs --sql` 產出離線 SQL 明確包含 `BEGIN;`、`LOCK TABLE document_upload_retired_keys IN ACCESS EXCLUSIVE MODE;`、`DO $$ ... RAISE EXCEPTION ... $$` 與 `COMMIT;`。
+  - 修正後重跑第二切片與文件／ACL 六個測試檔（`test_document_cleanup_preview_postgres.py`、`test_documents_postgres.py`、`test_document_api_postgres.py`、`test_document_list_postgres.py`、`test_document_status_postgres.py`、`test_document_upload_state_postgres.py`）：**12 passed, 1 warning**。
+  - 並行與鎖定驗證（2 項隔離並行案例全數通過）：(1) Session 2 先插入退役鍵未提交時，Session 1 執行 `downgrade()` 會被 `ACCESS EXCLUSIVE` 鎖阻塞，待 Session 2 提交後立即拋出「退役鍵紀錄非空」並保留資料表與紀錄；(2) Uploader 持有 `FOR UPDATE` 鎖定版本期間，Cleaner 唯讀預覽 `preview_upload_cleanup` 不阻塞，且 Uploader 完成上傳寫入 `stored` 與 `document_index_jobs` 後，預覽立即排除該版本。
+  - 全套文件／上傳／ACL／儲存回歸測試（12 個測試檔於乾淨 tmpfs PostgreSQL + MinIO）：**35 passed, 1 warning**。
+- 獨立 Security Review（`research` 子代理高推理模型唯讀審查）：判定**通過（Pass with Recommendations）**，無 Critical 阻擋項。另於 PostgreSQL 16 實測 `E'abc\n' ~ '^abc$'` 回傳 `false`，確認預設 ARE 模式不會誤納末尾換行符。審查所提「`complete_document_upload` 防範已退役鍵復活」、「Cleaner 刪除前須在 `FOR UPDATE` 下重驗資格並寫入退役鍵」與「`document_versions(storage_key)` 索引」已列為第三階段設計必納項目。
+- 本切片於通過 Gitleaks 8.30.1 暫存區掃描與 `.githooks/pre-commit` Hook 檢查後建立正體中文 Commit（SHA 以 Git 紀錄為準），未 Push。退役鍵實際切換、延遲 PUT／DELETE 對帳與可控孤兒清理待第三階段實作。
 
 ## 2026-11-13 M2-01 上傳失敗狀態（第一切片已提交）
 
