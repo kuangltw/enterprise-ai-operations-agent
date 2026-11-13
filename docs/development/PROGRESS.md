@@ -14,12 +14,21 @@
 
 ## 下一個任務
 
+> 2026-11-13 [儲存安全性實證](../testing/M2-01-STORAGE-SAFETY-PROOF.md)完成，獨立安全審查為 **CONDITIONAL PASS**。已實測晚到 PUT 在 DELETE 後重建舊鍵，新世代的獨立鍵未受影響。可靠寫入排空及部署安全條件仍待驗，正式 Cleaner DELETE 維持封鎖。
+
 > 2026-11-13 第三切片安全設計：新增 [清理設計與待執行測試矩陣](../architecture/M2-01-CLEANUP-DESIGN.md)。獨立安全審查為 **CONDITIONAL PASS**；舊 PUT 排空、故障還原與資料面隔離仍有 High 未驗證，**不得開始正式刪除實作**。
 
 > 2026-11-13 獨立複驗：第二切片唯讀範圍為 **CONDITIONAL PASS**；第三切片高風險刪除實作仍受阻，詳見 [獨立驗證報告](INDEPENDENT-REVIEW-M2-01.md)。下方既有工作清單與 agy 歷史測試記錄不代表解除此限制。
 
-1. M2-01 第三階段：退役鍵切換、可控孤兒物件清理（Dry Run、實際刪除與授權檢查分離，並在 `complete_document_upload` 防範已退役鍵復活），以及故障注入與並行回歸測試。第一切片已提交 `7c61e1444a0d4b3275ffbdfc4606c0b963375419`，第二切片已由 agy 完成驗證與獨立安全審查（本切片 Commit SHA 以 Git 紀錄為準）。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
+1. M2-01 第三切片放行前，先驗證舊鍵寫入排空、正式部署的租戶資料面隔離、永久墓碑的 Migration 與容錯還原，以及正式入口共用鎖序。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2-01 儲存安全性實證
+
+- 範圍與差異限 `scripts/testing/storage_safety` 的五個隔離測試原型及兩份紀錄。初評及差異重評共 2 分（隔離約束原型 +2、正式模組與 API +0、規格不明或難重現 +0），命中跨系統一致性、交易鎖、租戶隔離、並行、冪等、復原及刪除的強制升級條件。主代理執行實驗，Architect 與 Security Reviewer 以核對過的 Sol High 回合完成審查。
+- `python scripts/testing/storage_safety/run.py` 與 `python scripts/testing/storage_safety/run.py --followup` 均退出 0。隔離 PostgreSQL 16.15 驗證 live key 外鍵、永久退役、換鍵原子性、競態、同 ID 重試、真實 COMMIT 回應截斷、程序中止與安全降版。隔離 MinIO 驗證平面與版本化 Bucket 的晚到 PUT、DELETE 後重建、不同世代鍵隔離、程序中斷，以及非 Root 分前綴帳號的跨租戶拒絕。Gitleaks 8.30.1 的本機 Hook 回歸測試 6 項通過。
+- 獨立安全審查 **CONDITIONAL PASS**，允許提交隔離原型及證據。原型降版已將 guard 與 DROP 合併為單一 SQL 命令並重驗。實驗邊界、測試錯誤、實際鍵與 Version ID、尚待驗證項目及放行條件見[儲存安全性實證](../testing/M2-01-STORAGE-SAFETY-PROOF.md)。提交 SHA 以本節的 Git 紀錄為準。
+- 本輪到此停止。工作保持 `waiting_fence`，正式 Cleaner DELETE 須待可靠排空、實際授權與資料面隔離、正式 Migration／完整鎖序及故障還原證據。
 
 ## 2026-11-13 M2-01 第三切片安全設計
 
