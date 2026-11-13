@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from python_multipart.exceptions import FormParserError
 from python_multipart.multipart import parse_options_header
 from sqlalchemy import text
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
@@ -120,7 +120,7 @@ def _store_upload(db: Session, context: TenantContext, idempotency_key: UUID,
     except IdempotencyConflict as exc:
         raise AuthError(409, "IDEMPOTENCY_CONFLICT", "無法以此冪等鍵完成上傳") from exc
     except (DocumentStoreUnavailable, MinioException, HTTPError, OSError,
-            OperationalError, StoredPdfMismatch) as exc:
+            DBAPIError, StoredPdfMismatch) as exc:
         raise AuthError(503, "DOCUMENT_UPLOAD_UNAVAILABLE", "目前無法確認文件已儲存") from exc
     return DocumentUploadAccepted(document_id=reserved.document_id, version_id=reserved.version_id)
 

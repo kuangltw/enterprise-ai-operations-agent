@@ -14,8 +14,17 @@
 
 ## 下一個任務
 
-1. M2-01 下一項是上傳失敗補償與孤兒物件清理，須與同鍵恢復共用版本鎖並保護已儲存版本。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
+1. M2-01 下一項切換為退役鍵登錄與預設 Dry Run 清理；本輪上傳失敗狀態第一切片待完成機密掃描及 Commit。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2-01 上傳失敗狀態（第一切片，最終掃描及提交中）
+
+- 實作差異已加入 `complete_document_upload`：MinIO 寫入後只有重新讀取明確回報 `NoSuchKey` 時才將仍在版本鎖下的 `pending_upload`／`failed` 記為 `failed`；內容不符或讀取結果不明時保留原狀。`stored` 不會降級；資料庫提交結果不明會回 503，供同鍵重試重新讀取與對帳。`failed` 代表本次未確認成功且可重試，先前逾時的 PUT 仍可能晚到，故不是物件不存在的證明或清理授權。
+- 初評命中 PostgreSQL／MinIO 一致性、交易鎖、並行、冪等、復原及 Tenant／ACL 安全強制升級條件。加分為：無 Migration／資料約束 +0；在既有 503 契約內調整，未達影響至少三個模組的標準 +0；規格已有設計且非難重現錯誤 +0，合計 0 分但因強制條件升級。實作後依 Diff 重評，仍命中相同強制條件、加分 0 分。Architect 前置設計與 Security Reviewer Sol High 獨立差異審查均已完成；主代理 Code Review 已完成，未發現阻擋缺陷。Explorer 使用 GPT-6 Luna Low 完成唯讀追蹤。實際物件刪除仍須另行設計實作及獨立審查。
+- 在隔離 PostgreSQL／MinIO 容器（資料使用 tmpfs、合成測試資料、MinIO 測試應用帳號非 Root）套用 `alembic upgrade head` 至 `0009_document_index_jobs` 成功；兩個上傳測試檔共 **12 passed、1 warning**。首次收集測試因環境缺少 `python-multipart` 相依而失敗；改以目前 `requirements-dev.txt` 安裝測試相依後重跑通過。容器與測試資料已清理。
+- 另以隔離環境執行 PDF 上傳 API、ACL 與物件儲存回歸，共九個測試檔 **19 passed、1 warning**；未改動測試以放寬授權條件。此結果與前述兩個上傳測試檔分開記錄。
+- 測試涵蓋寫入失敗後同鍵恢復、`stored` 不降級、索引工作唯一性及提交結果不明。提交回應遺失由包裝 `Session.commit` 的故障注入模擬，並非真正資料庫連線中斷；因此不宣稱已驗證實際斷線後由全新連線重試。Security Reviewer 依 GPT-6.1 Sol High 執行紀錄完成差異審查，未發現阻擋缺陷；`failed` 仍可能遇到晚到的 MinIO PUT，禁止 Cleaner 僅依此狀態刪除。
+- 最終 Gitleaks 暫存掃描將於 Commit 前執行，掃描尚未完成。第一切片中文 Commit 尚待建立，Commit SHA 以後續 Git 紀錄為準。孤兒清理、退役鍵、延遲 PUT／DELETE 對帳、Cleaner 並行及 Dry Run 仍未實作或驗收；下一個小任務為退役鍵登錄與預設 Dry Run 清理，並須另行獨立安全審查。
 
 ## 2026-11-13 強制風險評分與模型分流
 

@@ -186,7 +186,7 @@ CREATE TABLE document_chunks (
 
 必要不變條件：發佈的 `current_version` 必須存在、索引為 `ready`；Owner（擁有者）必須是同 Tenant 的成員；重複 SHA256 應以交易鎖及明確版本政策處理。Qdrant Payload（負載欄位）應帶 `tenant_id`、`document_id`、`version_id`、`chunk_id`、`allowed_roles`。檢索後仍需由 PostgreSQL 重新檢查 ACL。
 
-目前資料庫只保證 `current_version` 指向現有且同租戶的版本、儲存狀態值有效，以及同租戶非空冪等鍵不重複。既有版本在 Migration 後保守標為 `pending_upload`，不能據此判定物件已存在；後續上傳流程須先對帳 MinIO 才可標為 `stored`。**`ready` 後發布、Owner 成員資格、同 SHA256 去重與檢索時 ACL 重驗尚未實作**。現行單一文件 Metadata 讀取已有 Tenant Membership 與 ACL 檢查；在對應 API／交易測試完成前，不可開放原文上傳、原文讀取或知識檢索。
+目前資料庫只保證 `current_version` 指向現有且同租戶的版本、儲存狀態值有效，以及同租戶非空冪等鍵不重複。既有版本在 Migration 後保守標為 `pending_upload`，不能據此判定物件已存在；上傳流程須先對帳 MinIO 才可標為 `stored`。`failed` 僅代表某次上傳尚未確認成功、允許以同一冪等鍵重試；由於先前逾時的 MinIO PUT 可能晚到，`failed` 不代表物件不存在，也不能作為刪除授權。資料庫提交結果不明時，須以同鍵重新讀取狀態並對帳。孤兒物件候選登錄、退役鍵及安全清理尚未實作，無法以目前 Schema 安全辨認或刪除候選物件。**`ready` 後發布、Owner 成員資格、同 SHA256 去重與檢索時 ACL 重驗尚未實作**。現行單一文件 Metadata 讀取已有 Tenant Membership 與 ACL 檢查；在對應 API／交易測試完成前，不可開放原文讀取或知識檢索。
 
 ## 5. Agent 執行歷程
 

@@ -196,21 +196,122 @@ def test_upload_completion_reconciles_ambiguous_results():
                                                  prepared)
                     assert connection.execute(text("""
                         SELECT storage_status FROM document_versions WHERE id = :id
-                    """), {"id": str(third.version_id)}).scalar_one() == "pending_upload"
+                    """), {"id": str(third.version_id)}).scalar_one() == "failed"
                     assert connection.execute(text("""
                         SELECT count(*) FROM document_index_jobs
                         WHERE tenant_id = :tenant_id AND document_version_id = :id
                     """), {"tenant_id": str(tenant_id),
                            "id": str(third.version_id)}).scalar_one() == 0
+                    keys.append(third.storage_key)
+                    recovered = complete_document_upload(db, client, bucket, tenant_id,
+                                                         user_id, third_key, prepared)
+                    assert recovered.key == third.storage_key
+                    assert connection.execute(text("""
+                        SELECT storage_status FROM document_versions WHERE id = :id
+                    """), {"id": str(third.version_id)}).scalar_one() == "stored"
+                    assert connection.execute(text("""
+                        SELECT count(*) FROM document_index_jobs
+                        WHERE tenant_id = :tenant_id AND document_version_id = :id
+                    """), {"tenant_id": str(tenant_id),
+                           "id": str(third.version_id)}).scalar_one() == 1
 
                     client.remove_object(bucket, first.storage_key)
                     keys.remove(first.storage_key)
                     with pytest.raises(StoredObjectMissing):
                         complete_document_upload(db, client, bucket, tenant_id,
                                                  user_id, first_key, prepared)
+                    assert connection.execute(text("""
+                        SELECT storage_status FROM document_versions WHERE id = :id
+                    """), {"id": str(first.version_id)}).scalar_one() == "stored"
+                    assert connection.execute(text("""
+                        SELECT count(*) FROM document_index_jobs
+                        WHERE tenant_id = :tenant_id AND document_version_id = :id
+                    """), {"tenant_id": str(tenant_id),
+                           "id": str(first.version_id)}).scalar_one() == 1
             finally:
                 outer.rollback()
     finally:
         for key in keys:
+            client.remove_object(bucket, key)
+        client.remove_bucket(bucket)
+
+
+@pytest.mark.parametrize("commit_happened", [False, True], ids=["before-commit", "after-commit"])
+def test_upload_commit_error_recovers_same_version_and_one_job(monkeypatch, commit_happened):
+    """資料庫提交前失敗或提交後回應遺失，都須以同鍵重新對帳。"""
+    client = Minio(os.environ["MINIO_ENDPOINT"],
+                   access_key=os.environ["MINIO_ACCESS_KEY"],
+                   secret_key=os.environ["MINIO_SECRET_KEY"], secure=False)
+    bucket = f"commit-{uuid4().hex}"
+    client.make_bucket(bucket)
+    tenant_id, user_id, request_key = uuid4(), uuid4(), uuid4()
+    prepared = prepare_pdf(BytesIO(b"%PDF-1.4\nsynthetic commit failure\n%%EOF\n"))
+    key = None
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("INSERT INTO tenants (id, name) VALUES (:id, '合成租戶')"),
+                               {"id": str(tenant_id)})
+            connection.execute(text("""
+                INSERT INTO users (id, email, password_hash)
+                VALUES (:id, :email, 'synthetic-hash')
+            """), {"id": str(user_id), "email": f"{uuid4().hex}@example.invalid"})
+            connection.execute(text("""
+                INSERT INTO memberships (tenant_id, user_id, role)
+                VALUES (:tenant, :user, 'staff')
+            """), {"tenant": str(tenant_id), "user": str(user_id)})
+        with engine.connect() as first, engine.connect() as retry:
+            assert first.execute(text("SELECT pg_backend_pid()")).scalar_one() != retry.execute(
+                text("SELECT pg_backend_pid()")
+            ).scalar_one()
+            first.commit()
+            retry.commit()
+            with Session(bind=first) as db:
+                reservation = reserve_document_upload(db, tenant_id, user_id, "合成文件",
+                                                      request_key, prepared)
+                key = reservation.storage_key
+                commit = db.commit
+
+                def interrupted_commit():
+                    if commit_happened:
+                        commit()
+                    raise TimeoutError("合成的資料庫提交回應中斷")
+
+                with monkeypatch.context() as fault:
+                    fault.setattr(db, "commit", interrupted_commit)
+                    with pytest.raises(TimeoutError):
+                        complete_document_upload(db, client, bucket, tenant_id, user_id,
+                                                 request_key, prepared)
+
+            with Session(bind=retry) as db:
+                before_retry = db.execute(text("""
+                    SELECT storage_status FROM document_versions WHERE id = :id
+                """), {"id": str(reservation.version_id)}).scalar_one()
+                assert before_retry == ("stored" if commit_happened else "pending_upload")
+                same = reserve_document_upload(db, tenant_id, user_id, "合成文件",
+                                               request_key, prepared)
+                assert (same.document_id, same.version_id) == (reservation.document_id,
+                                                               reservation.version_id)
+                result = complete_document_upload(db, client, bucket, tenant_id, user_id,
+                                                  request_key, prepared)
+                assert result.key == key
+                assert db.execute(text("""
+                    SELECT storage_status FROM document_versions WHERE id = :id
+                """), {"id": str(reservation.version_id)}).scalar_one() == "stored"
+                assert db.execute(text("""
+                    SELECT count(*) FROM document_index_jobs
+                    WHERE tenant_id = :tenant AND document_version_id = :version
+                """), {"tenant": str(tenant_id),
+                       "version": str(reservation.version_id)}).scalar_one() == 1
+    finally:
+        with engine.begin() as cleanup:
+            params = {"tenant": str(tenant_id), "user": str(user_id)}
+            cleanup.execute(text("DELETE FROM document_index_jobs WHERE tenant_id = :tenant"), params)
+            cleanup.execute(text("DELETE FROM document_user_acl WHERE tenant_id = :tenant"), params)
+            cleanup.execute(text("DELETE FROM document_versions WHERE tenant_id = :tenant"), params)
+            cleanup.execute(text("DELETE FROM documents WHERE tenant_id = :tenant"), params)
+            cleanup.execute(text("DELETE FROM memberships WHERE tenant_id = :tenant AND user_id = :user"), params)
+            cleanup.execute(text("DELETE FROM tenants WHERE id = :tenant"), params)
+            cleanup.execute(text("DELETE FROM users WHERE id = :user"), params)
+        if key is not None:
             client.remove_object(bucket, key)
         client.remove_bucket(bucket)

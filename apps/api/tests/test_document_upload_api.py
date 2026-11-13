@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import DBAPIError
 
 from src import documents
 from src.auth import get_db, get_signing_key
@@ -68,3 +69,18 @@ def test_upload_rejects_oversized_stream_without_content_length(upload_client, m
         **headers, "Content-Type": "multipart/form-data; boundary=upload",
     }, content=iter([b"12345", b"67890"]))
     assert response.status_code == 413
+
+
+def test_upload_returns_503_without_database_error_details(upload_client, monkeypatch):
+    client, headers = upload_client
+    monkeypatch.setattr(documents, "get_document_store", lambda: object())
+
+    def fail_reservation(*args):
+        raise DBAPIError("synthetic query", {}, Exception("synthetic database detail"))
+
+    monkeypatch.setattr(documents, "reserve_document_upload", fail_reservation)
+    response = client.post(PATH, headers=headers, data={"title": "合成文件"},
+                           files={"file": ("sop.pdf", b"%PDF-1.4", "application/pdf")})
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "DOCUMENT_UPLOAD_UNAVAILABLE"
+    assert "synthetic database detail" not in response.text

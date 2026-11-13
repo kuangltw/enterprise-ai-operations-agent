@@ -64,6 +64,16 @@ def _lock_upload_member(db: Session, tenant_id: UUID, user_id: UUID) -> None:
         raise UploadForbidden("沒有上傳文件的權限")
 
 
+def _record_failed_upload(db: Session, tenant_id: UUID, version_id: UUID) -> None:
+    """在版本鎖下記錄可重試失敗；提交結果不明時由同鍵重試重新對帳。"""
+    db.execute(text("""
+        UPDATE document_versions SET storage_status = 'failed'
+        WHERE tenant_id = :tenant_id AND id = :version_id
+          AND storage_status IN ('pending_upload', 'failed')
+    """), {"tenant_id": str(tenant_id), "version_id": str(version_id)})
+    db.commit()
+
+
 def reserve_document_upload(db: Session, tenant_id: UUID, user_id: UUID,
                             title: str, idempotency_key: UUID,
                             prepared: PreparedPdf) -> ReservedUpload:
@@ -138,8 +148,9 @@ def complete_document_upload(db: Session, client: Minio, bucket: str,
     """對帳預約版本，必要時寫入 MinIO，再原子登錄儲存與索引工作。
 
     此函式自行提交或回滾 DB Session，外部 I/O 期間持有成員與版本鎖。
-    寫入回應遺失時讀回核對；無法確認則保留原 DB 狀態並拋出錯誤，
-    呼叫端可用相同冪等鍵重試。已標示 stored 卻缺物件時拒絕回報成功。
+    寫入回應遺失時讀回核對；已確認缺少物件的寫入失敗會登記 failed，
+    其他無法確認的結果保留原狀。呼叫端可用相同冪等鍵重新對帳；
+    DB 提交結果不明時不可推定提交失敗或刪除物件。已標示 stored 卻缺物件時拒絕回報成功。
     不發送 Celery 工作，也不發布 current_version。
     """
     _validate_prepared(prepared)
@@ -174,12 +185,14 @@ def complete_document_upload(db: Session, client: Minio, bucket: str,
             try:
                 store_prepared_pdf(client, bucket, *ids, prepared, key)
             except Exception:
-                # 寫入可能已成功但回應遺失；對帳無法確認時保留待查狀態。
+                # 寫入可能已成功但回應遺失；僅明確缺少物件時記錄失敗。
                 if not verify_stored_pdf(client, bucket, *ids, key,
                                          prepared.sha256, prepared.size):
+                    _record_failed_upload(db, tenant_id, row["version_id"])
                     raise
             if not verify_stored_pdf(client, bucket, *ids, key,
                                      prepared.sha256, prepared.size):
+                _record_failed_upload(db, tenant_id, row["version_id"])
                 raise StoredObjectMissing("寫入後找不到文件物件")
         db.execute(text("""
             UPDATE document_versions SET storage_status = 'stored'
