@@ -33,10 +33,13 @@
 | Method | Endpoint | 功能 |
 |---|---|---|
 | POST | `/auth/login` | 以 Email 與密碼登入，回傳 15 分鐘有效的 JWT |
-| GET | `/auth/me` | 驗證 JWT、使用者狀態與未撤銷 Session，回傳使用者 ID 及 Email |
-| POST | `/auth/logout` | 撤銷目前 Session，回傳 204 |
+| POST | `/auth/session` | 瀏覽器登入，成功回 204，使用 `Set-Cookie` 傳送工作階段憑證 |
+| GET | `/auth/me` | 驗證 Bearer 或工作階段 Cookie、使用者狀態與未撤銷 Session，回傳使用者 ID 及 Email |
+| POST | `/auth/logout` | 撤銷目前 Session，瀏覽器模式另清除 Cookie，回傳 204 |
 
 登入請求：`{"email":"user@example.invalid","password":"<password>"}`。成功回應包含 `access_token`、`token_type`（`Bearer`）及 UTC `expires_at`。JWT 的 `sub` 為 User ID、`jti` 為 Session ID；每次存取受保護端點必須重新檢查資料庫狀態。登入與身分驗證錯誤回傳上述 `error` 格式；422 請求結構錯誤使用 `VALIDATION_ERROR`，不回傳使用者輸入原文。尚未提供 Refresh Token（更新憑證）或公開註冊 API。
+
+上述 JWT 回應適用於 `POST /auth/login`。瀏覽器使用同來源的 `POST /auth/session`，帳密欄位相同。後端回傳 `__Secure-agent-session` Cookie（`HttpOnly`、`Secure`、`SameSite=Strict`、`Path=/api/v1`），有效期與 JWT 和資料庫工作階段相同。瀏覽器登入與使用 Cookie 的非安全方法須帶 `X-Session-Request: 1`，缺少時回 403。提供 `Authorization` 時以該標頭為準。重新載入時 `/auth/me` 回 401 才回到登入畫面，暫時性錯誤提供重試。
 
 登入嘗試以 Redis 對來源 IP 設定每 60 秒 10 次、對帳號設每 300 秒 5 次限制，超過回傳 429；Redis 無法使用時回傳 503。帳號識別以 HMAC 處理，不將 Email 原文寫入 Redis Key。伺服器只使用連線來源位址，不採信未受控的代理轉送 Header。
 
@@ -59,7 +62,7 @@
 
 列表回應為 `{"items":[{"id":"<uuid>","name":"合成租戶","role":"staff"}],"next_cursor":null}`。前兩個讀取端點只供租戶選擇與呈現；後續受保護業務端點仍須重新驗證 `X-Tenant-ID` 與 Membership。
 
-`GET /tenants/current` 必須同時帶有效 JWT 與 `X-Tenant-ID`。Header 只表示選擇；後端從資料庫檢查啟用租戶及目前 User 的 Membership，其他租戶回 404，停用租戶回 404。此端點供 M1-03 的授權相依性驗證；未授權倉庫範圍仍待後續實作。
+`GET /tenants/current` 必須同時帶有效憑證與 `X-Tenant-ID`。Header 只表示選擇；後端從資料庫檢查啟用租戶及目前 User 的 Membership，其他租戶與停用租戶回 404。成功回應包含 `id`、`name`、`role` 及目前角色的 `permissions` 陣列。個別資源仍須通過 ACL 或倉庫範圍檢查。
 
 倉庫範圍端點也需有效 JWT 與 `X-Tenant-ID`，先檢查 `inventory.read` 角色權限，再以 `(tenant_id, user_id, warehouse_code)` 查詢明確授權。列表回應為 `{"items":["WH-001"],"next_cursor":null}`；使用代碼字串 `cursor` 分頁，每頁最多 50 筆。目前只提供授權代碼查詢，尚未查詢 ERP 倉庫資料或驗證其租戶歸屬。授權寫入與 ERP 讀取必須在後續工作補上雙重檢查。
 

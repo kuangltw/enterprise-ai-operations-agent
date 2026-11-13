@@ -73,6 +73,7 @@ def test_login_and_revocation_against_postgres(monkeypatch):
             })
             assert current.status_code == 200
             assert current.json()["role"] == "staff"
+            assert "document.upload" in current.json()["permissions"]
             assert client.get("/api/v1/tenants/current", headers={
                 **headers, "X-Tenant-ID": str(other_tenant_id),
             }).status_code == 404
@@ -82,6 +83,20 @@ def test_login_and_revocation_against_postgres(monkeypatch):
             hidden = client.get(f"/api/v1/tenants/{other_tenant_id}", headers=headers)
             assert hidden.status_code == 404
             assert hidden.json()["error"]["code"] == "TENANT_NOT_FOUND"
+            with TestClient(app, base_url="https://testserver") as browser:
+                assert browser.post("/api/v1/auth/session", headers={"X-Session-Request": "1"}, json={
+                    "email": "synthetic-integration@example.invalid",
+                    "password": "synthetic-password-123",
+                }).status_code == 204
+                assert browser.get("/api/v1/tenants/current", headers={
+                    "X-Tenant-ID": str(other_tenant_id),
+                }).status_code == 404
+                connection.execute(text("UPDATE memberships SET role='viewer' WHERE user_id=:id"),
+                                   {"id": str(user_id)})
+                refreshed = browser.get("/api/v1/tenants/current", headers={"X-Tenant-ID": str(own_tenant_id)})
+                assert refreshed.status_code == 200
+                assert refreshed.json()["role"] == "viewer"
+                assert "document.upload" not in refreshed.json()["permissions"]
             member_body = {"email": "new@example.invalid", "password": "synthetic-password-123", "role": "staff"}
             assert client.post(f"/api/v1/tenants/{own_tenant_id}/members", headers=headers,
                                json=member_body).status_code == 403

@@ -1,5 +1,6 @@
 """登入、工作階段撤銷及停權的 API 測試。"""
 
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
@@ -60,6 +61,48 @@ def test_login_me_and_logout_revokes_session(auth_client):
     assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
 
 
+def test_browser_cookie_restores_user_and_logout_revokes_session(auth_client):
+    _, engine = auth_client
+    with TestClient(app, base_url="https://testserver") as browser:
+        headers = {"X-Session-Request": "1"}
+        body = {"email": "test@example.invalid", "password": "synthetic-password-123"}
+        assert browser.post("/api/v1/auth/session", json=body).status_code == 403
+        response = browser.post("/api/v1/auth/session", json=body, headers=headers)
+        assert response.status_code == 204
+        assert response.content == b""
+        cookie = response.headers["set-cookie"].lower()
+        assert all(attribute in cookie for attribute in (
+            "httponly", "secure", "samesite=strict", "path=/api/v1", "expires=",
+        ))
+        me = browser.get("/api/v1/auth/me")
+        assert me.status_code == 200
+        assert me.json()["email"] == body["email"]
+        assert browser.post("/api/v1/auth/logout").status_code == 403
+        assert browser.get("/api/v1/auth/me", headers={"Authorization": "Bearer invalid"}).status_code == 401
+        assert browser.get("/api/v1/auth/me").status_code == 200
+        logged_out = browser.post("/api/v1/auth/logout", headers=headers)
+        assert logged_out.status_code == 204
+        assert "max-age=0" in logged_out.headers["set-cookie"].lower()
+        assert browser.get("/api/v1/auth/me").status_code == 401
+        with engine.connect() as conn:
+            assert conn.execute(text("SELECT revoked_at FROM sessions")).scalar_one() is not None
+
+
+def test_browser_cookie_cannot_restore_expired_session(auth_client):
+    _, engine = auth_client
+    with TestClient(app, base_url="https://testserver") as browser:
+        response = browser.post("/api/v1/auth/session", headers={"X-Session-Request": "1"}, json={
+            "email": "test@example.invalid", "password": "synthetic-password-123",
+        })
+        assert response.status_code == 204
+        assert browser.get("/api/v1/auth/me").status_code == 200
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE sessions SET expires_at = :expired"), {
+                "expired": datetime.now(timezone.utc) - timedelta(minutes=1),
+            })
+        assert browser.get("/api/v1/auth/me").status_code == 401
+
+
 def test_invalid_password_and_disabled_user_are_rejected(auth_client):
     client, engine = auth_client
     login = {"email": "test@example.invalid", "password": "wrong-password"}
@@ -102,6 +145,7 @@ def test_openapi_contains_auth_contract():
     schema = app.openapi()
     paths = schema["paths"]
     assert "post" in paths["/api/v1/auth/login"]
+    assert "204" in paths["/api/v1/auth/session"]["post"]["responses"]
     assert "get" in paths["/api/v1/auth/me"]
     assert "post" in paths["/api/v1/auth/logout"]
     assert "get" in paths["/api/v1/documents/{document_id}"]
@@ -127,6 +171,9 @@ def test_openapi_contains_auth_contract():
     }
     assert "get" in paths["/api/v1/tenants"]
     assert "get" in paths["/api/v1/tenants/current"]
+    assert paths["/api/v1/tenants/current"]["get"]["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/CurrentTenant",
+    }
     assert "get" in paths["/api/v1/tenants/current/warehouse-scopes"]
     assert "get" in paths["/api/v1/tenants/current/warehouse-scopes/{warehouse_code}"]
     assert "get" in paths["/api/v1/tenants/{tenant_id}"]
@@ -138,6 +185,9 @@ def test_openapi_contains_auth_contract():
     assert "delete" in paths[scope_path]
     schemes = schema["components"]["securitySchemes"]
     assert schemes["HTTPBearer"] == {"type": "http", "scheme": "bearer"}
+    assert schemes["BrowserSession"] == {
+        "type": "apiKey", "in": "cookie", "name": "__Secure-agent-session",
+    }
     assert "security" not in paths["/api/v1/auth/login"]["post"]
     for path, method in (
         ("/api/v1/auth/me", "get"),
@@ -147,6 +197,7 @@ def test_openapi_contains_auth_contract():
         (scope_path, "put"),
     ):
         assert {"HTTPBearer": []} in paths[path][method]["security"]
+        assert {"BrowserSession": []} in paths[path][method]["security"]
 
 
 def test_login_limit_and_redis_outage_fail_closed(auth_client):

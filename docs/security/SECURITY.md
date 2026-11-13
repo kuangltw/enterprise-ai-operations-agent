@@ -11,6 +11,8 @@
 5. **ERP 交易邊界**：人工核准、職責分離、最新資料驗證、Outbox、ERP 冪等鍵與結果對帳。
 6. **跨語言服務邊界**：Python FastAPI 與 **C# ASP.NET Core Demo ERP** 需有服務身分驗證，禁止直接讓外部使用者呼叫 ERP 內部寫入端點。
 
+瀏覽器使用同來源的短效 HttpOnly、Secure、SameSite=Strict 工作階段 Cookie。登入與 Cookie 模式的寫入請求必須帶自訂標頭以防 CSRF（跨網站請求偽造）。部署時須使用 HTTPS，並維持同來源 API 邊界。登出先撤銷資料庫工作階段，再刪除 Cookie。設計與期限見 [ADR 0006](../adr/0006-browser-session-cookie.md)。
+
 ## 2. Role（角色）政策
 
 | Role | SOP 問答 | 庫存分析 | 採購草稿 | 核准 |

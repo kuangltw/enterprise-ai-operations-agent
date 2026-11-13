@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ApiError, getCurrentTenant, getMe, getTenants, login, logout, type Tenant, type User } from './api';
+import { ApiError, getCurrentTenant, getMe, getTenants, login, logout, type CurrentTenant, type Tenant, type User } from './api';
 import './style.css';
 
 const modules = [
@@ -10,18 +10,69 @@ const modules = [
   ['執行監控', 'Trace（追蹤）、Metrics（指標）'],
 ];
 
+// 僅保存分頁的租戶選擇；恢復時仍須由後端核對目前成員資格。
+function tenantPreference(userId: string, tenantId?: string): string | null {
+  const key = `workspace.tenant.${userId}`;
+  try {
+    if (tenantId === undefined) return sessionStorage.getItem(key);
+    if (tenantId) sessionStorage.setItem(key, tenantId);
+    else sessionStorage.removeItem(key);
+  } catch { /* 瀏覽器限制儲存時仍可登入及切換租戶。 */ }
+  return null;
+}
+
+async function restoreWorkspace() {
+  const user = await getMe();
+  const tenants = await getTenants();
+  const tenantId = tenantPreference(user.id);
+  let selected = null;
+  if (tenantId && tenants.some(tenant => tenant.id === tenantId)) {
+    try { selected = await getCurrentTenant(tenantId); }
+    catch (cause) {
+      // 成員資格可能在列表與目前租戶請求之間變更。
+      if (!(cause instanceof ApiError) || ![403, 404].includes(cause.status)) throw cause;
+    }
+  }
+  if (tenantId && !selected) tenantPreference(user.id, '');
+  return { user, tenants, selected };
+}
+
 function App() {
-  const [token, setToken] = useState<string | null>(null);
+  const [restoring, setRestoring] = useState(true);
+  const [restoreAttempt, setRestoreAttempt] = useState(0);
   const [user, setUser] = useState<User | null>(null);
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [selected, setSelected] = useState<Tenant | null>(null);
+  const [selected, setSelected] = useState<CurrentTenant | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    let active = true;
+    restoreWorkspace().then(workspace => {
+      if (!active) return;
+      setUser(workspace.user);
+      setTenants(workspace.tenants);
+      setSelected(workspace.selected);
+      setRestoring(false);
+    }).catch(cause => {
+      if (!active) return;
+      if (cause instanceof ApiError && cause.status === 401) setRestoring(false);
+      else setError(cause instanceof Error ? cause.message : '無法恢復工作階段。');
+    });
+    return () => { active = false; };
+  }, [restoreAttempt]);
+
   function clearSession() {
-    setToken(null); setUser(null); setTenants([]); setSelected(null); setPassword('');
+    if (user) tenantPreference(user.id, '');
+    setUser(null); setTenants([]); setSelected(null); setPassword('');
+  }
+
+  function retryRestore() {
+    setError('');
+    setRestoring(true);
+    setRestoreAttempt(attempt => attempt + 1);
   }
 
   function showError(cause: unknown) {
@@ -32,27 +83,35 @@ function App() {
   async function submitLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError('');
     try {
-      const accessToken = await login(email.trim(), password);
-      const [currentUser, available] = await Promise.all([getMe(accessToken), getTenants(accessToken)]);
-      setToken(accessToken); setUser(currentUser); setTenants(available); setPassword('');
+      await login(email.trim(), password);
+      setPassword('');
+      retryRestore();
     } catch (cause) { showError(cause); }
     finally { setBusy(false); }
   }
 
   async function selectTenant(id: string) {
     setSelected(null); setError('');
-    if (!token || !id) return;
+    if (!user) return;
+    tenantPreference(user.id, '');
+    if (!id) return;
     setBusy(true);
-    try { setSelected(await getCurrentTenant(token, id)); }
+    try {
+      setSelected(await getCurrentTenant(id));
+      tenantPreference(user.id, id);
+    }
     catch (cause) { showError(cause); }
     finally { setBusy(false); }
   }
 
   async function submitLogout() {
     setBusy(true); setError('');
-    try { if (token) await logout(token); }
+    try {
+      await logout();
+      clearSession();
+    }
     catch (cause) { showError(cause); }
-    finally { clearSession(); setBusy(false); }
+    finally { setBusy(false); }
   }
 
   return <main>
@@ -62,9 +121,12 @@ function App() {
       <p>企業 AI 營運代理系統</p>
     </header>
 
-    {!token ? <section className="panel login-panel" aria-labelledby="login-title">
+    {restoring ? <section className="panel" aria-label="工作階段">
+      {error ? <button type="button" onClick={retryRestore}>重試</button>
+        : <p role="status">正在確認工作階段…</p>}
+    </section> : !user ? <section className="panel login-panel" aria-labelledby="login-title">
       <div><p className="eyebrow">安全登入</p><h2 id="login-title">登入工作空間</h2>
-        <p className="muted">使用管理員建立的帳號登入。登入憑證只保留在目前頁面記憶體中。</p></div>
+        <p className="muted">使用管理員建立的帳號登入。</p></div>
       <form onSubmit={submitLogin}>
         <label htmlFor="email">Email</label>
         <input id="email" type="email" autoComplete="username" value={email}
@@ -91,7 +153,7 @@ function App() {
     </section>}
 
     {error && <p className="error" role="alert">{error}</p>}
-    {selected && token && <section className="features" aria-label="功能狀態">
+    {selected && user && <section className="features" aria-label="功能狀態">
       <div className="section-heading"><h2>功能概覽</h2><span>規劃中</span></div>
       <div className="cards">{modules.map(([title, description]) =>
         <article key={title}><h3>{title}</h3><p>{description}</p><small>尚未實作</small></article>

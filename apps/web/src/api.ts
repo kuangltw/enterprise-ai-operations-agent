@@ -1,4 +1,5 @@
 export type Tenant = { id: string; name: string; role: string };
+export type CurrentTenant = Tenant & { permissions: string[] };
 export type User = { id: string; email: string };
 type ApiErrorBody = { error?: { code?: string; message?: string } };
 
@@ -6,9 +7,9 @@ export class ApiError extends Error {
   constructor(public readonly status: number, message: string) { super(message); }
 }
 
-async function request<T>(path: string, token?: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (init.method && init.method !== 'GET') headers.set('X-Session-Request', '1');
   if (init.body) headers.set('Content-Type', 'application/json');
   let response: Response;
   try {
@@ -25,25 +26,24 @@ async function request<T>(path: string, token?: string, init: RequestInit = {}):
   return await response.json() as T;
 }
 
-export async function login(email: string, password: string): Promise<string> {
-  const result = await request<{ access_token: string }>('/auth/login', undefined, {
+export function login(email: string, password: string): Promise<void> {
+  return request<void>('/auth/session', {
     method: 'POST', body: JSON.stringify({ email, password }),
   });
-  return result.access_token;
 }
 
-export const getMe = (token: string) => request<User>('/auth/me', token);
-export async function getTenants(token: string): Promise<Tenant[]> {
+export const getMe = () => request<User>('/auth/me');
+export async function getTenants(): Promise<Tenant[]> {
   const items: Tenant[] = [];
   let cursor: string | null = null;
   do {
     const path: string = cursor ? `/tenants?cursor=${encodeURIComponent(cursor)}` : '/tenants';
-    const page: { items: Tenant[]; next_cursor: string | null } = await request(path, token);
+    const page: { items: Tenant[]; next_cursor: string | null } = await request(path);
     items.push(...page.items);
     cursor = page.next_cursor;
   } while (cursor);
   return items;
 }
-export const getCurrentTenant = (token: string, tenantId: string) =>
-  request<Tenant>('/tenants/current', token, { headers: { 'X-Tenant-ID': tenantId } });
-export const logout = (token: string) => request<void>('/auth/logout', token, { method: 'POST' });
+export const getCurrentTenant = (tenantId: string) =>
+  request<CurrentTenant>('/tenants/current', { headers: { 'X-Tenant-ID': tenantId } });
+export const logout = () => request<void>('/auth/logout', { method: 'POST' });

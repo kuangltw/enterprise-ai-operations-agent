@@ -54,13 +54,12 @@
 - 在一次性 tmpfs PostgreSQL 從空白套用 Alembic 至 `0008_document_user_acl`，執行預約、上傳狀態、文件 ACL 讀取及角色政策測試：**10 passed、1 個既有棄用警告**。隔離容器以 `docker compose down` 清理，沒有刪除 Volume。未執行並行請求壓力測試；資料庫唯一約束仍是並行重複鍵的最後防線。
 - 上傳前準備資料重新核對大小、檔頭與 SHA256；未完成 MinIO 寫入、補償與索引排程之前，不應將預約視為已完成上傳，也不應暴露端點。歷史登出 500 無新證據，維持未重現／保留追蹤。
 - 起始本機與 `origin/main` 同為 `bdc7f80`，工作目錄乾淨；官方額度開始時 5 小時剩餘 52%、每週剩餘 93%。本項未 Push；提交 SHA 以 Git 紀錄為準。
-## 待辦：安全恢復登入狀態（M2 前端改善，非當前阻斷）
+## 2026-11-13 重新整理後恢復登入
 
-- **目前行為**：React 將 Access Token（存取權杖）保留在記憶體中；重新整理頁面後需重新登入，符合現有實作。此項尚未開發，不得標記完成。
-- **目標**：重新整理頁面時，使用後端簽發的 HttpOnly Refresh Cookie（不可由 JavaScript 讀取的更新權杖 Cookie），取得新的短效 Access Token；Access Token 仍只保留於記憶體，不放入 `localStorage`／`sessionStorage`。
-- **安全設計**：評估 Refresh Token Rotation（更新權杖輪替）與重用偵測、Session 撤銷、閒置／絕對逾時、登出清除 Cookie；明確配置 Secure、HttpOnly、SameSite、Path、Cookie 的跨站使用情境及 CSRF（跨網站請求偽造）防護。避免 Refresh 請求並行競態、跨租戶權限快取失效，以及失敗時無限重試。
-- **實作要求**：先更新身分驗證 ADR／API Contract，再以最小獨立工作單位實作；後端驗證須依有效 Session 和目前成員資格，不信任前端儲存的租戶／角色。需有 Unit／Integration Test 與 Playwright E2E，涵蓋重新整理後恢復登入、Token 過期、自動更新、撤銷／登出後拒絕恢復、CSRF、並行請求及跨租戶隔離。
-- **優先順序**：P2 使用體驗與安全改善。**先完成 M2 文件上傳的資料庫／MinIO 交易一致性、冪等、補償與權限保護**，再於合適的前端開發階段安排；不得為此打斷當前開發循環或重啟歷史登出 500 的無界調查。
+- 影響為已登入使用者重新整理後失去工作區狀態，需重新輸入帳密。修正前以隔離 Playwright 重現，登入與選擇租戶成功，重新整理後找不到工作區。原因是 React 記憶體中的 JWT 與狀態被清空，啟動時也未向後端驗證。退出條件為 Chromium 可恢復工作區與目前租戶，過期或登出後回到登入畫面，且通過既有授權回歸。
+- `auth.py` 新增瀏覽器登入端點，將原 15 分鐘 JWT 放入 HttpOnly、Secure、SameSite=Strict Cookie，沿用資料庫驗證與撤銷。前端在 `api.ts`、`main.tsx` 依 `/auth/me` 恢復身分，從 `tenants.py`、`role_policy.py` 取得重驗的租戶與角色權限。分頁僅保存租戶選擇，API 持續檢查目前成員資格及資源授權。
+- `python scripts/testing/run_m1_e2e.py` 修正前 3 通過、2 失敗，修正後 **5 通過**。涵蓋登入、重新整理後身分與租戶、登出後無法恢復、跨租戶拒絕，以及模擬 503 可重試和 401 回到登入。一次性 PostgreSQL、Redis、MinIO 套用至 `0009_document_index_jobs`，`pytest -q -p no:cacheprovider` **53 通過、17 則相依套件棄用警告**，直接驗證資料庫工作階段到期、Cookie 登出撤銷及角色降權後的即時權限。`npm run build` 通過。
+- 正式部署依 [ADR 0006](../adr/0006-browser-session-cookie.md) 使用同來源 HTTPS。本輪瀏覽器以本機 loopback 驗證，正式 HTTPS 代理尚未驗證。期限仍為 15 分鐘，過期需登入。歷史登出 500 依既有紀錄追蹤。提交 SHA 以本輪 Git 紀錄為準，下一項依本檔 M2 工作清單。
 
 ## 2026-11-13 M2 單一使用者文件授權
 

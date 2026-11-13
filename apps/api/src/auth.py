@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from typing import Iterator
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, Request, Security, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, Depends, Request, Response, Security, status
+from fastapi.security import APIKeyCookie, HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -16,11 +16,15 @@ from .db import engine
 from .passwords import hash_password, verify_password
 from .rate_limit import LoginRateLimiter, get_login_limiter
 from .settings import settings
-from .tokens import issue_access_token, verify_access_token
+from .tokens import IssuedToken, issue_access_token, verify_access_token
 
 router = APIRouter(prefix="/api/v1/auth", tags=["身分驗證"])
 _DUMMY_HASH = hash_password("synthetic-dummy-password")
 _bearer = HTTPBearer(auto_error=False)
+_COOKIE = "__Secure-agent-session"
+_COOKIE_PATH = "/api/v1"
+_browser_session = APIKeyCookie(name=_COOKIE, scheme_name="BrowserSession", auto_error=False)
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
 class AuthError(Exception):
@@ -66,11 +70,19 @@ def get_signing_key() -> str:
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Security(_bearer),
+    session_cookie: str | None = Security(_browser_session),
     db: Session = Depends(get_db),
     signing_key: str = Depends(get_signing_key),
 ) -> Principal:
-    token = credentials.credentials if credentials is not None else ""
+    """驗證憑證及資料庫工作階段；顯式 Authorization 優先於 Cookie。"""
+    if "authorization" in request.headers:
+        token = credentials.credentials if credentials is not None else ""
+    else:
+        token = session_cookie or ""
+        if token and request.method not in _SAFE_METHODS:
+            require_session_header(request)
     if not token or " " in token:
         raise AuthError(401, "UNAUTHENTICATED", "請先登入")
     claims = verify_access_token(token, signing_key)
@@ -89,10 +101,15 @@ def get_current_user(
     return Principal(claims.user_id, claims.session_id, row["email"])
 
 
-@router.post("/login", response_model=TokenResponse)
-def login(body: LoginRequest, request: Request, db: Session = Depends(get_db),
-          signing_key: str = Depends(get_signing_key),
-          limiter: LoginRateLimiter = Depends(get_login_limiter)) -> TokenResponse:
+def require_session_header(request: Request) -> None:
+    """跨來源瀏覽器須經 CORS 預檢才能送出此標頭；API 採同來源部署。"""
+    if request.headers.get("X-Session-Request") != "1":
+        raise AuthError(403, "FORBIDDEN", "缺少瀏覽器工作階段標頭")
+
+
+def authenticate(body: LoginRequest, request: Request, db: Session,
+                 signing_key: str, limiter: LoginRateLimiter) -> IssuedToken:
+    """驗證帳密與速率限制，提交可撤銷的工作階段後才回傳憑證。"""
     email = body.email.strip().lower()
     address = request.client.host if request.client else "unknown"
     try:
@@ -120,20 +137,46 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db),
     """), {"id": str(session_id), "user_id": str(user_id),
            "expires_at": issued.expires_at})
     db.commit()
+    return issued
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(body: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db),
+          signing_key: str = Depends(get_signing_key),
+          limiter: LoginRateLimiter = Depends(get_login_limiter)) -> TokenResponse:
+    """為 Bearer 用戶端簽發短效憑證。"""
+    issued = authenticate(body, request, db, signing_key, limiter)
+    response.headers["Cache-Control"] = "no-store"
     return TokenResponse(access_token=issued.token, expires_at=issued.expires_at)
 
 
+@router.post("/session", status_code=status.HTTP_204_NO_CONTENT)
+def login_browser(body: LoginRequest, request: Request, response: Response,
+                  db: Session = Depends(get_db), signing_key: str = Depends(get_signing_key),
+                  limiter: LoginRateLimiter = Depends(get_login_limiter)) -> None:
+    """以瀏覽器專用 Cookie 傳回同一種工作階段憑證。"""
+    require_session_header(request)
+    issued = authenticate(body, request, db, signing_key, limiter)
+    response.headers["Cache-Control"] = "no-store"
+    response.set_cookie(_COOKIE, issued.token, expires=issued.expires_at, path=_COOKIE_PATH,
+                        secure=True, httponly=True, samesite="strict")
+
+
 @router.get("/me", response_model=MeResponse)
-def me(principal: Principal = Depends(get_current_user)) -> MeResponse:
+def me(response: Response, principal: Principal = Depends(get_current_user)) -> MeResponse:
+    response.headers["Cache-Control"] = "no-store"
     return MeResponse(id=principal.user_id, email=principal.email)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(principal: Principal = Depends(get_current_user),
+def logout(request: Request, response: Response, principal: Principal = Depends(get_current_user),
            db: Session = Depends(get_db)) -> None:
+    """先提交撤銷，成功後才通知瀏覽器清除 Cookie。"""
     db.execute(text("""
         UPDATE sessions SET revoked_at = :now
         WHERE id = :session_id AND user_id = :user_id AND revoked_at IS NULL
     """), {"now": datetime.now(timezone.utc), "session_id": str(principal.session_id),
            "user_id": str(principal.user_id)})
     db.commit()
+    if "authorization" not in request.headers:
+        response.delete_cookie(_COOKIE, path=_COOKIE_PATH, secure=True, httponly=True, samesite="strict")

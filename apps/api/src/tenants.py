@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from .auth import AuthError, Principal, get_current_user, get_db
 from .identity_input import normalize_email, validate_new_password
 from .passwords import hash_password
-from .role_policy import allows, require_permission
+from .role_policy import Permission, allows, require_permission, role_permissions
 from .tenant_context import TenantContext
 from .warehouse_scope import list_warehouse_codes, require_warehouse_code
 
@@ -23,6 +23,10 @@ class TenantItem(BaseModel):
     id: UUID
     name: str
     role: str
+
+
+class CurrentTenant(TenantItem):
+    permissions: list[Permission]
 
 
 class TenantList(BaseModel):
@@ -113,11 +117,12 @@ def list_tenants(
     return TenantList(items=items, next_cursor=items[-1].id if len(rows) > 50 else None)
 
 
-@router.get("/current", response_model=TenantItem)
+@router.get("/current", response_model=CurrentTenant)
 def get_current_tenant(
     context: TenantContext = Depends(require_permission("tenant.read")),
-) -> TenantItem:
-    return TenantItem(id=context.tenant_id, name=context.name, role=context.role)
+) -> CurrentTenant:
+    return CurrentTenant(id=context.tenant_id, name=context.name, role=context.role,
+                         permissions=role_permissions(context.role))
 
 
 @router.get("/current/warehouse-scopes", response_model=WarehouseScopeList)

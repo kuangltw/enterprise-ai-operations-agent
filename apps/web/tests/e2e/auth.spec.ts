@@ -44,10 +44,32 @@ test('登入後切換所屬租戶並登出', async ({ page }) => {
   await tenants.selectOption(tenantB);
   await expect(page.getByText('目前角色：viewer')).toBeVisible();
   await expect(tenants.locator(`option[value="${tenantC}"]`)).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: '工作空間', exact: true })).toBeVisible();
+  await expect(page.getByText(email, { exact: true })).toBeVisible();
+  await expect(tenants).toHaveValue(tenantB);
+  await expect(page.getByText('目前角色：viewer')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '功能概覽' })).toBeVisible();
   await page.getByRole('button', { name: '登出' }).click();
   await expect(page.getByRole('heading', { name: '登入工作空間' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '功能概覽' })).toHaveCount(0);
   await page.reload();
+  await expect(page.getByRole('heading', { name: '登入工作空間' })).toBeVisible();
+});
+
+test('重新載入收到工作階段失效時才顯示登入畫面', async ({ page }) => {
+  await page.goto('/');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('密碼').fill(password);
+  await page.getByRole('button', { name: '登入', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '工作空間', exact: true })).toBeVisible();
+  await page.route('**/api/v1/auth/me', route => route.fulfill({ status: 503 }));
+  await page.reload();
+  await expect(page.getByRole('button', { name: '重試' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '登入工作空間' })).toHaveCount(0);
+  await page.unroute('**/api/v1/auth/me');
+  await page.route('**/api/v1/auth/me', route => route.fulfill({ status: 401 }));
+  await page.getByRole('button', { name: '重試' }).click();
   await expect(page.getByRole('heading', { name: '登入工作空間' })).toBeVisible();
 });
 

@@ -28,6 +28,11 @@ def allows(role: str, permission: Permission) -> bool:
     return permission in _ALLOWED.get(role, frozenset())
 
 
+def role_permissions(role: str) -> list[Permission]:
+    """回傳角色政策授予的權限；個別資源仍須經 ACL 等範圍檢查。"""
+    return sorted(_ALLOWED.get(role, ()))
+
+
 def require_permission(permission: Permission):
     """供需要 `X-Tenant-ID` 的端點使用，回傳已驗證的 Tenant Context。"""
     def dependency(context: TenantContext = Depends(get_tenant_context)) -> TenantContext:
