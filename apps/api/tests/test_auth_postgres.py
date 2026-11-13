@@ -110,6 +110,11 @@ def test_login_and_revocation_against_postgres(monkeypatch):
             assert client.get("/api/v1/tenants/current", headers={
                 **headers, "X-Tenant-ID": str(own_tenant_id),
             }).status_code == 404
+            # 模擬 PostgreSQL 時鐘領先 API，仍須能撤銷工作階段。
+            connection.execute(text("""
+                UPDATE sessions SET created_at = CURRENT_TIMESTAMP + INTERVAL '30 seconds'
+                WHERE user_id = :id
+            """), {"id": str(user_id)})
             assert client.post("/api/v1/auth/logout", headers=headers).status_code == 204
             assert client.get("/api/v1/auth/me", headers=headers).status_code == 401
             assert client.post("/api/v1/auth/logout", headers=headers).status_code == 401

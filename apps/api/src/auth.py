@@ -171,9 +171,14 @@ def me(response: Response, principal: Principal = Depends(get_current_user)) -> 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 def logout(request: Request, response: Response, principal: Principal = Depends(get_current_user),
            db: Session = Depends(get_db)) -> None:
-    """先提交撤銷，成功後才通知瀏覽器清除 Cookie。"""
+    """先提交撤銷，成功後才通知瀏覽器清除 Cookie。
+
+    應用與資料庫的時鐘可能不同；撤銷時間以下限 created_at 保存，
+    避免時間約束使仍有效的工作階段無法撤銷。
+    """
     db.execute(text("""
-        UPDATE sessions SET revoked_at = :now
+        UPDATE sessions SET revoked_at = CASE
+            WHEN created_at > :now THEN created_at ELSE :now END
         WHERE id = :session_id AND user_id = :user_id AND revoked_at IS NULL
     """), {"now": datetime.now(timezone.utc), "session_id": str(principal.session_id),
            "user_id": str(principal.user_id)})

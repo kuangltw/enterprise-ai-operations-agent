@@ -49,6 +49,10 @@ def test_disable_user_revokes_existing_sessions(monkeypatch):
             headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
             assert client.get("/api/v1/auth/me", headers=headers).status_code == 200
 
+            connection.execute(text("""
+                UPDATE sessions SET created_at = CURRENT_TIMESTAMP + INTERVAL '30 seconds'
+                WHERE user_id = :id
+            """), {"id": str(user_id)})
             assert disable_user(connection, email.upper())
             assert disable_user(connection, email)
             assert not disable_user(connection, "missing@example.invalid")

@@ -23,7 +23,12 @@ def auth_client(monkeypatch):
     )
     with engine.begin() as conn:
         conn.execute(text("CREATE TABLE users (id TEXT PRIMARY KEY, email TEXT, password_hash TEXT, status TEXT)"))
-        conn.execute(text("CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, expires_at TEXT, revoked_at TEXT)"))
+        conn.execute(text("""
+            CREATE TABLE sessions (
+                id TEXT PRIMARY KEY, user_id TEXT, expires_at TEXT, revoked_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
         conn.execute(text("INSERT INTO users VALUES (:id, :email, :hash, 'active')"), {
             "id": str(uuid4()), "email": "test@example.invalid",
             "hash": hash_password("synthetic-password-123"),
