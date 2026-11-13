@@ -17,6 +17,14 @@
 1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為受控文件上傳流程：先確定預留物件鍵、資料庫交易、MinIO 寫入、重試對帳及失敗補償，再補 API、Contract／Integration Test；完成前不開放上傳端點。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
+## 待辦：安全恢復登入狀態（M2 前端改善，非當前阻斷）
+
+- **目前行為**：React 將 Access Token（存取權杖）保留在記憶體中；重新整理頁面後需重新登入，符合現有實作。此項尚未開發，不得標記完成。
+- **目標**：重新整理頁面時，使用後端簽發的 HttpOnly Refresh Cookie（不可由 JavaScript 讀取的更新權杖 Cookie），取得新的短效 Access Token；Access Token 仍只保留於記憶體，不放入 `localStorage`／`sessionStorage`。
+- **安全設計**：評估 Refresh Token Rotation（更新權杖輪替）與重用偵測、Session 撤銷、閒置／絕對逾時、登出清除 Cookie；明確配置 Secure、HttpOnly、SameSite、Path、Cookie 的跨站使用情境及 CSRF（跨網站請求偽造）防護。避免 Refresh 請求並行競態、跨租戶權限快取失效，以及失敗時無限重試。
+- **實作要求**：先更新身分驗證 ADR／API Contract，再以最小獨立工作單位實作；後端驗證須依有效 Session 和目前成員資格，不信任前端儲存的租戶／角色。需有 Unit／Integration Test 與 Playwright E2E，涵蓋重新整理後恢復登入、Token 過期、自動更新、撤銷／登出後拒絕恢復、CSRF、並行請求及跨租戶隔離。
+- **優先順序**：P2 使用體驗與安全改善。**先完成 M2 文件上傳的資料庫／MinIO 交易一致性、冪等、補償與權限保護**，再於合適的前端開發階段安排；不得為此打斷當前開發循環或重啟歷史登出 500 的無界調查。
+
 ## 2026-11-13 M2 單一使用者文件授權
 
 - `0008_document_user_acl` 新增 `(tenant_id, document_id, user_id)` 授權表，複合外鍵同時約束文件與租戶成員資格；撤銷成員資格會連動刪除授權。文件單筆與列表查詢允許符合角色 ACL 或指定使用者 ACL 的目前成員，避免未來上傳時因建立者角色而自動讓所有同角色成員讀取。
