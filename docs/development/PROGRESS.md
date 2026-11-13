@@ -10,12 +10,18 @@
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
 | M1-05 CI 與整合驗收 | Accepted with Known Issues（有條件驗收通過） | `66aabc9` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本次隔離 E2E 4 passed；單次登出 500 留存[獨立追蹤](issues/LOGOUT-500.md) |
-| M2 RAG | 文件資料庫、ACL 保護的 Metadata／狀態讀取及 MinIO 儲存元件已實作並測試 | `0006_documents` 至 `0009_document_index_jobs`、`GET /documents`、`GET /documents/{id}`、`GET /documents/{id}/status`、隔離 MinIO 寫入／讀回；上傳 API、Worker、解析、索引、問答仍未實作 |
+| M2 RAG | 文件中繼資料、ACL、PDF 上傳與索引工作持久登錄已實作 | `0006_documents` 至 `0009_document_index_jobs`；隔離 PostgreSQL／MinIO 已測上傳 API；清理、Worker、掃描、解析、索引及問答待完成 |
 
 ## 下一個任務
 
-1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為文件上傳 API 的邊界：驗證 multipart 請求及錯誤映射，加入 OpenAPI／Contract／E2E Test；索引任務建立與清理政策未完成前，不宣稱 RAG-T01 通過。
+1. M2-01 下一項是上傳失敗補償與孤兒物件清理，須與同鍵恢復共用版本鎖並保護已儲存版本。登出回歸出現新證據，另依[追蹤紀錄](issues/LOGOUT-500.md)調查。RAG-T01 仍待驗收。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2 PDF 上傳 API
+
+- `POST /api/v1/documents` 先驗證工作階段、租戶及角色，再計量並解析 multipart，沿用 PDF 檔頭與摘要檢查、資料庫預約、MinIO 對帳及工作登錄。完成交易重驗並鎖住建立者 ACL，MinIO 傳輸設短逾時並停用自動重試。202 回傳文件及版本識別，版本保留未發布。
+- 隔離 tmpfs PostgreSQL／MinIO 執行 `alembic upgrade head` 到 `0009_document_index_jobs`，再執行 `python -m pytest -q tests`，結果 **59 passed、1 failed、1 skipped**。上傳契約、HTTP 上傳／重試／ACL 撤銷與儲存對帳均通過；登出回歸在 `ck_sessions_revoked_after_creation` 失敗，Redis 整合未啟用。容器已清理。 `python -m pip_audit -r apps/api/requirements-dev.txt` 未發現已知漏洞。
+- MinIO 測試使用隔離服務的合成管理憑證；實際受限帳號與 Bucket 政策、並行請求及瀏覽器驗收仍待驗。遠端起始 `808dd5d` 的建置與機密掃描成功，本次變更的遠端 CI 待驗。提交識別見 Git 紀錄。
 
 ## 2026-11-13 M2 上傳交易模組可維護性
 

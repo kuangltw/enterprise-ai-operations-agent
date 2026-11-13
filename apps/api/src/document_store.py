@@ -7,6 +7,7 @@ MinIO Root 憑證不得注入 API，Bucket 的私有政策須在部署時建立�
 from dataclasses import dataclass
 
 from minio import Minio
+from urllib3 import PoolManager, Timeout
 
 from .settings import Settings, settings
 
@@ -43,7 +44,10 @@ def get_document_store(config: Settings = settings) -> DocumentStore:
         raise DocumentStoreUnavailable("非本機 MinIO 連線必須使用 TLS")
     try:
         client = Minio(endpoint, access_key=access_key,
-                       secret_key=secret_key, secure=config.minio_secure)
+                       secret_key=secret_key, secure=config.minio_secure,
+                       # 上傳交易持有資料庫鎖；寫入結果由應用層對帳。
+                       http_client=PoolManager(timeout=Timeout(connect=2, read=5),
+                                               retries=False))
     except ValueError as exc:
         raise DocumentStoreUnavailable("文件儲存端點格式不正確") from exc
     return DocumentStore(client, bucket)

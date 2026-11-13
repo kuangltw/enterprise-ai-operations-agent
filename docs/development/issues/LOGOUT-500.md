@@ -8,6 +8,8 @@
 
 ## 風險與再發處理
 
+2026-11-13 M2 回歸在 Windows 原生 Python 與新建 Docker PostgreSQL 執行 `test_login_and_revocation_against_postgres` 時，登出更新觸發 `ck_sessions_revoked_after_creation`。觀察到應用程式提供的撤銷時間比資料庫建立時間早約 0.25 秒。此證據重新開啟 Session 撤銷調查；原瀏覽器事件是否同源仍待確認。假設為應用與資料庫時間來源不同。退出條件為以可控時差重現、修正並驗證原憑證在登出後失效，再執行授權回歸。依 AGENTS.md 採兩輪、每輪至多三種策略。
+
 根因**尚未確認**，也沒有證據證明歷史 500 已修復。若再次發生，可能造成撤銷交易未完成、Session 狀態不明或認證服務暫時不可用。再次發生時收集 Trace ID／Request ID、UTC 時間、例外類型、SQLSTATE（若有）、安全處理後的 API／PostgreSQL Log、連線池與服務關閉時序，以及登出後原 JWT 對 `/auth/me` 的 HTTP 狀態。不得輸出或保存 JWT、密碼、金鑰、Cookie、完整連線字串及敏感 Log。
 
 以下任一條件成立即重新列為 Blocker：目前可重現登出 HTTP 500；撤銷後舊 JWT 仍有效或再次登出恢復 Session；跨租戶資料洩漏；核心 API、Migration、E2E 或 Gitleaks 測試失敗；有證據顯示重大交易一致性或安全風險。

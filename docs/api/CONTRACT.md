@@ -76,7 +76,7 @@
 
 | Method | Endpoint | 功能 | 權限 |
 |---|---|---|---|
-| POST | `/documents` | 上傳文件並建立非同步索引任務 | staff 以上 |
+| POST | `/documents` | 儲存 PDF 並持久登錄待處理工作 | staff 以上 |
 | GET | `/documents` | 列出可存取文件 | 成員 + ACL |
 | GET | `/documents/{id}` | 文件 Metadata（中繼資料） | ACL |
 | GET | `/documents/{id}/status` | 查看索引狀態 | ACL |
@@ -85,7 +85,11 @@
 | POST | `/knowledge/ask` | 產生附來源引用的回答 | 成員 + ACL |
 | DELETE | `/documents/{id}` | 邏輯刪除 | Owner / admin |
 
-M2 唯讀端點 `GET /documents/{id}` 已實作。必須帶 `Authorization: Bearer <JWT>` 與 `X-Tenant-ID`；後端重新驗證有效租戶成員資格，且該成員目前角色須在文件的 `document_acl` 中，或使用者須在 `document_user_acl` 中。只回傳 `status = active` 的文件；文件不存在、屬於其他租戶、已刪除或沒有 ACL 權限時一律回 404 `DOCUMENT_NOT_FOUND`，避免洩漏存在與否。成功回應為 `{"id":"<uuid>","tenant_id":"<uuid>","title":"合成文件","current_version":null,"created_at":"<UTC timestamp>"}`。`current_version` 為 `null` 表示尚未發布版本；此端點不回傳原始文件或索引內容。文件上傳、原文讀取及知識 API 仍為規劃中。
+上傳端點 `POST /documents` 接受 `multipart/form-data`，包含 `title`（去除首尾空白後 1–255 字元）及一個 `file`（`application/pdf`、最多 10 MiB、須有 PDF 檔頭）。整體請求上限為 10 MiB + 64 KiB。須帶入 `X-Tenant-ID` 及 UUID 格式的 `Idempotency-Key`，並使用 Bearer JWT 或瀏覽器工作階段（Cookie 請求另帶 `X-Session-Request: 1`）。
+
+成功回 202 及 `document_id`、`version_id`。同租戶、建立者、標題及 SHA256 使用同鍵重試，須仍具上傳角色與建立者 ACL 才能取得相同識別。不同內容或無法使用原預約回 409。超限回 413，媒體類型或 PDF 檔頭不符回 415，欄位或 multipart 錯誤回 422。無法確認儲存時回 503，可使用原鍵及原內容重試。202 表示已儲存並登錄待處理工作，版本尚未發布。
+
+中繼資料端點 `GET /documents/{id}` 已實作。必須帶 `Authorization: Bearer <JWT>` 與 `X-Tenant-ID`；後端重新驗證有效租戶成員資格，且該成員目前角色須在文件的 `document_acl` 中，或使用者須在 `document_user_acl` 中。只回傳 `status = active` 的文件；文件不存在、屬於其他租戶、已刪除或沒有 ACL 權限時一律回 404 `DOCUMENT_NOT_FOUND`，避免洩漏存在與否。成功回應為 `{"id":"<uuid>","tenant_id":"<uuid>","title":"合成文件","current_version":null,"created_at":"<UTC timestamp>"}`。`current_version` 為 `null` 表示尚未發布版本；此端點不回傳原始文件或索引內容。原文讀取及知識 API 仍為規劃中。
 
 `GET /documents` 以相同租戶與 ACL 條件列出未刪除文件，依文件 UUID 遞增排序；每頁最多 50 筆，接受可選的 `cursor` UUID，回傳 `{"items":[<上述 Metadata>],"next_cursor":"<uuid>"}`，末頁的 `next_cursor` 為 `null`。不得從項目數量或游標洩漏其他租戶或無權限文件。
 

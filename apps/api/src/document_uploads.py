@@ -147,15 +147,21 @@ def complete_document_upload(db: Session, client: Minio, bucket: str,
         _lock_upload_member(db, tenant_id, user_id)
         row = db.execute(text("""
             SELECT v.id AS version_id, v.document_id, v.storage_key,
-                   v.storage_status, v.sha256, d.owner_id, d.status
+                   v.storage_status, v.sha256, d.owner_id, d.status,
+                   EXISTS (
+                       SELECT 1 FROM document_user_acl AS ua
+                       WHERE ua.tenant_id = d.tenant_id AND ua.document_id = d.id
+                         AND ua.user_id = :user_id
+                       FOR SHARE
+                   ) AS creator_has_acl
             FROM document_versions AS v
             JOIN documents AS d ON d.tenant_id = v.tenant_id AND d.id = v.document_id
             WHERE v.tenant_id = :tenant_id AND v.idempotency_key = :idempotency_key
             FOR UPDATE OF v, d
-        """), {"tenant_id": str(tenant_id),
+        """), {"tenant_id": str(tenant_id), "user_id": str(user_id),
                "idempotency_key": str(idempotency_key)}).mappings().first()
         if (row is None or row["owner_id"] != user_id or row["status"] != "active"
-                or row["sha256"] != prepared.sha256):
+                or not row["creator_has_acl"] or row["sha256"] != prepared.sha256):
             raise IdempotencyConflict("上傳預約不存在或內容不符")
 
         key = row["storage_key"]

@@ -1,4 +1,4 @@
-"""文件中繼資料與狀態查詢。
+"""文件上傳、中繼資料與狀態查詢。
 
 Tenant Context 先從資料庫重驗成員資格；每個文件 SQL 同時再查目前
 User／Tenant／Membership 與 ACL，避免兩次查詢間撤權或改角色後沿用舊角色。
@@ -7,12 +7,29 @@ User／Tenant／Membership 與 ACL，避免兩次查詢間撤權或改角色後�
 from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header, Request
+from minio.error import MinioException
 from pydantic import BaseModel
+from python_multipart.exceptions import FormParserError
+from python_multipart.multipart import parse_options_header
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
+from starlette.datastructures import UploadFile
+from starlette.formparsers import MultiPartException, MultiPartParser
+from urllib3.exceptions import HTTPError
 
 from .auth import AuthError, get_db
+from .document_store import DocumentStoreUnavailable, get_document_store
+from .document_uploads import (
+    IdempotencyConflict, UploadForbidden,
+    complete_document_upload, reserve_document_upload,
+)
+from .object_storage import (
+    MAX_PDF_BYTES, InvalidPdf, PdfTooLarge, StoredPdfMismatch, prepare_pdf,
+)
+from .role_policy import allows
 from .tenant_context import TenantContext, get_tenant_context
 
 router = APIRouter(prefix="/api/v1/documents", tags=["文件"])
@@ -59,6 +76,106 @@ class DocumentStatus(BaseModel):
     latest_version: int | None
     storage_status: str | None
     indexing_status: str | None
+
+
+class DocumentUploadAccepted(BaseModel):
+    """已確認原始檔儲存且已持久登錄處理工作時回傳的識別。"""
+
+    document_id: UUID
+    version_id: UUID
+
+
+_MAX_UPLOAD_BODY = MAX_PDF_BYTES + 64 * 1024
+
+
+async def _bounded_upload_body(request: Request):
+    """完整計量再交給解析器，涵蓋沒有 Content-Length 的請求。"""
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > _MAX_UPLOAD_BODY:
+            raise AuthError(413, "PDF_TOO_LARGE", "上傳請求超過大小限制")
+        body.extend(chunk)
+    yield bytes(body)
+
+
+def _store_upload(db: Session, context: TenantContext, idempotency_key: UUID,
+                  title: str, file: UploadFile) -> DocumentUploadAccepted:
+    """驗證檔頭後委派既有交易；失敗時保留可用同鍵對帳的預約。"""
+    try:
+        prepared = prepare_pdf(file.file)
+        store = get_document_store()
+        reserved = reserve_document_upload(
+            db, context.tenant_id, context.user_id, title, idempotency_key, prepared,
+        )
+        complete_document_upload(
+            db, store.client, store.bucket, context.tenant_id, context.user_id,
+            idempotency_key, prepared,
+        )
+    except PdfTooLarge as exc:
+        raise AuthError(413, "PDF_TOO_LARGE", "PDF 超過大小限制") from exc
+    except InvalidPdf as exc:
+        raise AuthError(415, "INVALID_PDF", "檔案格式不符 PDF") from exc
+    except UploadForbidden as exc:
+        raise AuthError(403, "DOCUMENT_UPLOAD_FORBIDDEN", "沒有上傳文件的權限") from exc
+    except IdempotencyConflict as exc:
+        raise AuthError(409, "IDEMPOTENCY_CONFLICT", "無法以此冪等鍵完成上傳") from exc
+    except (DocumentStoreUnavailable, MinioException, HTTPError, OSError,
+            OperationalError, StoredPdfMismatch) as exc:
+        raise AuthError(503, "DOCUMENT_UPLOAD_UNAVAILABLE", "目前無法確認文件已儲存") from exc
+    return DocumentUploadAccepted(document_id=reserved.document_id, version_id=reserved.version_id)
+
+
+@router.post(
+    "", status_code=202, response_model=DocumentUploadAccepted,
+    responses={
+        401: {"description": "尚未登入或工作階段失效"},
+        403: {"description": "角色無上傳權限"},
+        404: {"description": "租戶不存在或無法存取"},
+        409: {"description": "無法以此冪等鍵完成上傳"},
+        413: {"description": "PDF 或 multipart 請求超過大小限制"},
+        415: {"description": "媒體類型或 PDF 檔頭不符"},
+        422: {"description": "請求資料不符規定"},
+        503: {"description": "目前無法確認文件已儲存"},
+    },
+    openapi_extra={"requestBody": {"required": True, "content": {
+        "multipart/form-data": {"schema": {
+            "type": "object", "required": ["title", "file"],
+            "properties": {"title": {"type": "string", "maxLength": 255},
+                           "file": {"type": "string", "format": "binary"}},
+        }, "encoding": {"file": {"contentType": "application/pdf"}}},
+    }}},
+)
+async def upload_document(
+    request: Request,
+    idempotency_key: UUID = Header(alias="Idempotency-Key"),
+    context: TenantContext = Depends(get_tenant_context),
+    db: Session = Depends(get_db),
+) -> DocumentUploadAccepted:
+    """授權後收下新文件；202 表示已儲存並待處理，原文仍未發布。"""
+    if not allows(context.role, "document.upload"):
+        raise AuthError(403, "DOCUMENT_UPLOAD_FORBIDDEN", "沒有上傳文件的權限")
+    if parse_options_header(request.headers.get("content-type", ""))[0] != b"multipart/form-data":
+        raise AuthError(415, "UNSUPPORTED_MEDIA_TYPE", "上傳須使用 multipart/form-data")
+    try:
+        form = await MultiPartParser(
+            request.headers, _bounded_upload_body(request),
+            max_files=1, max_fields=1, max_part_size=4096,
+        ).parse()
+    except (MultiPartException, FormParserError) as exc:
+        raise AuthError(422, "VALIDATION_ERROR", "multipart 請求資料不符規定") from exc
+
+    try:
+        title, file = form.get("title"), form.get("file")
+        if not isinstance(title, str) or not isinstance(file, UploadFile):
+            raise AuthError(422, "VALIDATION_ERROR", "須提供文件標題及 PDF 檔案")
+        title = title.strip()
+        if not title or len(title) > 255 or "\x00" in title:
+            raise AuthError(422, "VALIDATION_ERROR", "文件標題不符規定")
+        if file.content_type != "application/pdf":
+            raise AuthError(415, "INVALID_PDF", "檔案媒體類型須為 application/pdf")
+        return await run_in_threadpool(_store_upload, db, context, idempotency_key, title, file)
+    finally:
+        await form.close()
 
 
 @router.get("", response_model=DocumentList)
