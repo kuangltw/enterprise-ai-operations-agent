@@ -17,6 +17,15 @@
 1. M2-01 下一項是上傳失敗補償與孤兒物件清理，須與同鍵恢復共用版本鎖並保護已儲存版本。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
+## 2026-11-13 Codex Desktop 多代理調度
+
+- 新增 `.codex/config.toml` 及 `.codex/agents/` 下六個自訂角色，`AGENTS.md` 定義自動分工、高風險 Sol High 審查與主代理的測試、機密掃描及提交責任。專案預設 GPT-6.1 Terra Medium，每個對話最多同時開啟兩個子代理。
+- 本機版本為 Codex Desktop `26.1106.6628.0`，內建執行檔 `0.167.0-alpha.4.1`，獨立 CLI `0.167.1`。Python 3.12 `tomllib` 通過七個設定檔的解析、角色欄位及模型／強度檢查。兩個執行檔的 `app-server --strict-config --print-startup-config` 均成功；Desktop 內建 App Server 的 `config/read` 讀到專案預設與並行上限，`model/list` 列出三組指定模型及強度，`thread/start` 在未指定模型時採用 Terra Medium。
+- 專案需受信任才會載入設定。已開啟的對話可能保留舊設定，請用專案新對話核對。Desktop 介面若帶入其他模型或推理強度，在輸入框下方選 GPT-6.1 Terra／Medium。子代理繼承主對話的沙箱與核准權限，角色的唯讀要求由指令約束；工具層級唯讀由主對話權限設定。依據 [OpenAI 子代理文件](https://learn.chatgpt.com/docs/agent-configuration/subagents)、[設定優先順序](https://learn.chatgpt.com/docs/config-file/config-basic)及[模型文件](https://learn.chatgpt.com/docs/models)。
+- 暫存唯讀 App Server 對話以 `never` 核准策略執行。六個角色均完成，`subAgentActivity` 啟動事件確認 Explorer／Docs 為 Luna Low、Implementer／Tester 為 Terra Medium、Architect／Security Reviewer 為 Sol High。測試分批執行，每批最多兩個。
+- Explorer 追蹤 PDF 上傳入口及 MinIO 寫入點。Tester 獨立執行 `git diff --check -- AGENTS.md`，退出碼 0；子代理啟動 Python 遭拒，七個 TOML 的解析由主代理驗證。Architect 核對版本發布不變條件，提出儲存成功而資料庫提交失敗時保留舊發布版本的測試情境。Docs、Implementer、Security Reviewer 完成調度規則、預設模型及權限繼承的唯讀檢查。
+- Desktop 圖形介面的新對話模型選擇優先順序、超過並行上限的拒絕行為及寫入權限未實測。未取得可按模型歸屬的用量統計。提交識別見本節的 Git 紀錄。
+
 ## 2026-11-13 工作階段撤銷時差回歸
 
 - 上傳整合回歸發現 PostgreSQL 拒絕早於工作階段建立時間的撤銷時間。以可控 30 秒差重現；登出和全域停權在同一筆 SQL 更新保留建立時間下限，原憑證撤銷後回 401。SQLite 測試表補上與 PostgreSQL Migration 相符的建立時間欄位。
