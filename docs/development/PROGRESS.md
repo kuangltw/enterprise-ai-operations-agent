@@ -10,12 +10,18 @@
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
 | M1-05 CI 與整合驗收 | Accepted with Known Issues（有條件驗收通過） | `66aabc9` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本次隔離 E2E 4 passed；單次登出 500 留存[獨立追蹤](issues/LOGOUT-500.md) |
-| M2 RAG | 文件資料庫、ACL 保護的單筆／列表讀取及 MinIO 儲存元件已實作並測試 | `0006_documents` 至 `0008_document_user_acl`、`GET /documents`、`GET /documents/{id}`、隔離 MinIO 寫入／讀回；上傳 API、解析、索引、問答仍未實作 |
+| M2 RAG | 文件資料庫、ACL 保護的 Metadata／狀態讀取及 MinIO 儲存元件已實作並測試 | `0006_documents` 至 `0008_document_user_acl`、`GET /documents`、`GET /documents/{id}`、`GET /documents/{id}/status`、隔離 MinIO 寫入／讀回；上傳 API、解析、索引、問答仍未實作 |
 
 ## 下一個任務
 
 1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為文件上傳 API 的邊界：設定私有 MinIO Bucket 與連線、驗證 multipart 請求及錯誤映射，並加入 OpenAPI／Contract／E2E Test；索引任務建立與清理政策未完成前，不宣稱 RAG-T01 通過。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2 文件狀態查詢
+
+- 與遠端 `main` 分岔時安全合併 `bd5dad9` 的 `AGENTS.md` 程式碼註解規範，中文 Merge Commit 為 `bd11be2`；本機既有兩筆 Commit 與未提交端點改動均保留，未改寫歷史。依新版規範，正在修改的文件查詢模組補上 Tenant／ACL、游標及狀態回應的設計說明。
+- 新增 `GET /api/v1/documents/{document_id}/status`，以同一筆 SQL 查詢重驗目前成員、角色與 ACL 並讀取最新版本，避免沿用舊 Tenant Context 洩漏狀態；回傳已選版本號與最新版本的儲存／索引狀態。單筆、列表與狀態共用相同授權 SQL 條件，防止日後規則分歧。沒有版本時回 `null`，不回傳原文或物件鍵。同步 OpenAPI Contract Test、PostgreSQL 整合測試與 API 契約文件。隔離 PostgreSQL 的狀態、撤權、單筆／列表與契約測試 **4 passed、1 個既有棄用警告**；容器已清理。提交 SHA 見本輪 Git 紀錄；未 Push。
+- 此端點只提供狀態查詢；上傳 API、索引排程與端對端文件流程仍未完成。歷史登出 500 無新證據，維持未重現／保留追蹤。
 
 ## 2026-11-13 M2 上傳物件寫入與狀態對帳
 

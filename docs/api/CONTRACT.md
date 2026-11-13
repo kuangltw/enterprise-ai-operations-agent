@@ -86,6 +86,8 @@ M2 唯讀端點 `GET /documents/{id}` 已實作。必須帶 `Authorization: Bear
 
 `GET /documents` 以相同租戶與 ACL 條件列出未刪除文件，依文件 UUID 遞增排序；每頁最多 50 筆，接受可選的 `cursor` UUID，回傳 `{"items":[<上述 Metadata>],"next_cursor":"<uuid>"}`，末頁的 `next_cursor` 為 `null`。不得從項目數量或游標洩漏其他租戶或無權限文件。
 
+`GET /documents/{id}/status` 已實作，沿用單筆文件的有效成員資格與角色／指定使用者 ACL 判斷；無權限、已刪除或不存在均回 404 `DOCUMENT_NOT_FOUND`。回應為 `{"document_id":"<uuid>","current_version":1,"latest_version":2,"storage_status":"pending_upload","indexing_status":"pending"}`；尚無版本時後四個狀態欄位均為 `null`。`latest_version` 是版本號最大的紀錄，`current_version` 是已選版本，兩者可能不同；此端點不回傳原始文件、物件鍵或索引內容，也不代表索引已排程。
+
 `POST /knowledge/ask` Request（請求）：
 
 ```json

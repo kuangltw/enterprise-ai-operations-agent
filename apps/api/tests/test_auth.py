@@ -105,6 +105,7 @@ def test_openapi_contains_auth_contract():
     assert "get" in paths["/api/v1/auth/me"]
     assert "post" in paths["/api/v1/auth/logout"]
     assert "get" in paths["/api/v1/documents/{document_id}"]
+    assert "get" in paths["/api/v1/documents/{document_id}/status"]
     assert "get" in paths["/api/v1/documents"]
     document_list = paths["/api/v1/documents"]["get"]
     assert {"HTTPBearer": []} in document_list["security"]
@@ -116,6 +117,13 @@ def test_openapi_contains_auth_contract():
                for parameter in document_get["parameters"])
     assert document_get["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/DocumentMetadata",
+    }
+    document_status = paths["/api/v1/documents/{document_id}/status"]["get"]
+    assert {"HTTPBearer": []} in document_status["security"]
+    assert any(parameter["name"] == "X-Tenant-ID" and parameter["required"]
+               for parameter in document_status["parameters"])
+    assert document_status["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/DocumentStatus",
     }
     assert "get" in paths["/api/v1/tenants"]
     assert "get" in paths["/api/v1/tenants/current"]
