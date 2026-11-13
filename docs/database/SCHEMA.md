@@ -1,6 +1,6 @@
 # PostgreSQL 資料庫 Schema（結構）規格 v0.1
 
-> **整體仍為設計規格。** M1 的 `tenants`、`users`、`memberships`、`sessions` 與 Demo ERP 基礎資料表已有 Migration；M2 已有 `0006_documents` 文件基礎表及 `0007_document_upload_state` 儲存狀態 Migration。其餘資料表仍未實作。詳見 [M1-01 驗證紀錄](../development/M1-01-VERIFICATION.md) 與 [開發進度](../development/PROGRESS.md)。建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
+> **整體仍為設計規格。** M1 的 `tenants`、`users`、`memberships`、`sessions` 與 Demo ERP 基礎資料表已有 Migration；M2 已有 `0006_documents` 至 `0009_document_index_jobs` 的文件、ACL、儲存狀態與索引工作登錄 Migration。其餘資料表仍未實作。詳見 [M1-01 驗證紀錄](../development/M1-01-VERIFICATION.md) 與 [開發進度](../development/PROGRESS.md)。建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
 
 ## 1. 資料庫邊界
 
@@ -99,7 +99,7 @@ ALTER TABLE membership_warehouse_scopes ADD CONSTRAINT fk_scope_tenant_warehouse
 
 ## 4. Knowledge（文件與索引）
 
-`0006_documents` 已建立下列 `documents`、`document_versions`、`document_acl` 資料表，並以複合外鍵限制版本、ACL 與已選 `current_version` 必須屬於同一租戶及同一文件。`0007_document_upload_state` 新增儲存狀態及租戶內唯一的可選冪等鍵；`0008_document_user_acl` 可授權單一租戶成員，成員資格撤銷時連動移除。`document_chunks` 仍為規劃中。下列 DDL 為設計摘要；實際約束以 Migration 為準。
+`0006_documents` 已建立下列 `documents`、`document_versions`、`document_acl` 資料表，並以複合外鍵限制版本、ACL 與已選 `current_version` 必須屬於同一租戶及同一文件。`0007_document_upload_state` 新增儲存狀態及租戶內唯一的可選冪等鍵；`0008_document_user_acl` 可授權單一租戶成員，成員資格撤銷時連動移除；`0009_document_index_jobs` 登錄每版本唯一的待索引工作。`document_chunks` 仍為規劃中。下列 DDL 為設計摘要；實際約束以 Migration 為準。
 
 ```sql
 CREATE TABLE documents (
@@ -153,6 +153,19 @@ CREATE TABLE document_versions (
   UNIQUE (tenant_id,idempotency_key),
   FOREIGN KEY (tenant_id,document_id)
     REFERENCES documents(tenant_id,id)
+);
+
+CREATE TABLE document_index_jobs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id uuid NOT NULL,
+  document_version_id uuid NOT NULL,
+  status varchar(20) NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending','processing','completed','failed')),
+  attempt_count integer NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id,document_version_id),
+  FOREIGN KEY (tenant_id,document_version_id)
+    REFERENCES document_versions(tenant_id,id)
 );
 
 CREATE TABLE document_chunks (

@@ -162,6 +162,12 @@ def complete_document_upload(db: Session, client: Minio, bucket: str,
             UPDATE document_versions SET storage_status = 'stored'
             WHERE tenant_id = :tenant_id AND id = :version_id
         """), {"tenant_id": str(tenant_id), "version_id": str(row["version_id"])})
+        # 與儲存狀態同筆提交；重試不能建立第二份索引工作。
+        db.execute(text("""
+            INSERT INTO document_index_jobs (tenant_id, document_version_id)
+            VALUES (:tenant_id, :version_id)
+            ON CONFLICT (tenant_id, document_version_id) DO NOTHING
+        """), {"tenant_id": str(tenant_id), "version_id": str(row["version_id"])})
         db.commit()
         return StoredPdf(key=key, sha256=prepared.sha256, size=prepared.size)
     except Exception:

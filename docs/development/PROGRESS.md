@@ -10,12 +10,18 @@
 | M1-03 RBAC 與租戶隔離 | 本機基礎完成，ERP 執行點待 M3 | Tenant Context、Role Policy、倉庫 Scope 與跨租戶測試已實作；實際 ERP 倉庫歸屬仍需 M3 複驗 |
 | M1-04 React 登入與管理介面 | 本機 Headless 瀏覽器驗收通過，仍有間歇性 API 風險 | Playwright Test 驗證登入、錯誤密碼、租戶切換、跨租戶拒絕與登出；一次登出回 500 後未再重現 |
 | M1-05 CI 與整合驗收 | Accepted with Known Issues（有條件驗收通過） | `66aabc9` 的 Python、dotnet、frontend、compose、e2e 與 Gitleaks 工作成功；本次隔離 E2E 4 passed；單次登出 500 留存[獨立追蹤](issues/LOGOUT-500.md) |
-| M2 RAG | 文件資料庫、ACL 保護的 Metadata／狀態讀取及 MinIO 儲存元件已實作並測試 | `0006_documents` 至 `0008_document_user_acl`、`GET /documents`、`GET /documents/{id}`、`GET /documents/{id}/status`、隔離 MinIO 寫入／讀回；上傳 API、解析、索引、問答仍未實作 |
+| M2 RAG | 文件資料庫、ACL 保護的 Metadata／狀態讀取及 MinIO 儲存元件已實作並測試 | `0006_documents` 至 `0009_document_index_jobs`、`GET /documents`、`GET /documents/{id}`、`GET /documents/{id}/status`、隔離 MinIO 寫入／讀回；上傳 API、Worker、解析、索引、問答仍未實作 |
 
 ## 下一個任務
 
 1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為文件上傳 API 的邊界：驗證 multipart 請求及錯誤映射，加入 OpenAPI／Contract／E2E Test；索引任務建立與清理政策未完成前，不宣稱 RAG-T01 通過。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2 索引工作持久登錄
+
+- `0009_document_index_jobs` 為每個文件版本建立租戶隔離、唯一的索引工作紀錄。`complete_document_upload` 在已核對 MinIO 內容後，同筆 PostgreSQL 交易更新 `storage_status = stored` 並新增 `pending` 工作；同鍵重試使用唯一約束避免重複，寫入前失敗不登錄工作。
+- 一次性 tmpfs PostgreSQL／MinIO 從空白套用 Alembic 至 `0009_document_index_jobs`，執行上傳完成、預約與狀態整合測試 **3 passed、1 個既有棄用警告**；容器和網路已清理。同步 Schema 與 RAG 索引分離 ADR。Redis／Celery Worker、索引重試與 `ready` 發布仍未實作，不能宣稱索引或 RAG-T01 驗收通過。
+- 本項在 `bf93829` 後進行，未 Push；提交 SHA 以 Git 紀錄為準。
 
 ## 2026-11-13 M2 私有文件儲存連線設定
 

@@ -80,6 +80,11 @@ def test_upload_completion_reconciles_ambiguous_results():
                     assert stored.key == first.storage_key
                     assert complete_document_upload(db, client, bucket, tenant_id,
                                                     user_id, first_key, prepared) == stored
+                    assert connection.execute(text("""
+                        SELECT count(*) FROM document_index_jobs
+                        WHERE tenant_id = :tenant_id AND document_version_id = :id
+                    """), {"tenant_id": str(tenant_id),
+                           "id": str(first.version_id)}).scalar_one() == 1
 
                     connection.execute(text("""
                         UPDATE memberships SET role = 'viewer'
@@ -101,6 +106,11 @@ def test_upload_completion_reconciles_ambiguous_results():
                                                       tenant_id, user_id, second_key,
                                                       prepared)
                     assert result.key == second.storage_key
+                    assert connection.execute(text("""
+                        SELECT count(*) FROM document_index_jobs
+                        WHERE tenant_id = :tenant_id AND document_version_id = :id
+                    """), {"tenant_id": str(tenant_id),
+                           "id": str(second.version_id)}).scalar_one() == 1
 
                     third_key = uuid4()
                     third = reserve_document_upload(db, tenant_id, user_id,
@@ -112,6 +122,11 @@ def test_upload_completion_reconciles_ambiguous_results():
                     assert connection.execute(text("""
                         SELECT storage_status FROM document_versions WHERE id = :id
                     """), {"id": str(third.version_id)}).scalar_one() == "pending_upload"
+                    assert connection.execute(text("""
+                        SELECT count(*) FROM document_index_jobs
+                        WHERE tenant_id = :tenant_id AND document_version_id = :id
+                    """), {"tenant_id": str(tenant_id),
+                           "id": str(third.version_id)}).scalar_one() == 0
 
                     client.remove_object(bucket, first.storage_key)
                     keys.remove(first.storage_key)
