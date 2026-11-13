@@ -14,8 +14,14 @@
 
 ## 下一個任務
 
-1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為文件上傳 API 的邊界：設定私有 MinIO Bucket 與連線、驗證 multipart 請求及錯誤映射，並加入 OpenAPI／Contract／E2E Test；索引任務建立與清理政策未完成前，不宣稱 RAG-T01 通過。
+1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為文件上傳 API 的邊界：驗證 multipart 請求及錯誤映射，加入 OpenAPI／Contract／E2E Test；索引任務建立與清理政策未完成前，不宣稱 RAG-T01 通過。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2 私有文件儲存連線設定
+
+- 新增可選的 MinIO Endpoint、受限應用憑證、Bucket 與 TLS 設定。API 只在設定齊全時建立 Client；明文連線僅允許 Compose 內部 `minio` 或本機位址。`docker-compose.yml` 將文件儲存設定傳給 API，但不重用 MinIO Root 憑證；`.env.example` 留空應用憑證並註明須另外建立僅限私有 `documents` Bucket 的權限。
+- 合成設定單元測試驗證缺少憑證拒絕、外部明文端點拒絕及內部端點接受，結果 **3 passed**；`docker compose config --quiet` 通過。尚未建立或檢查實際 Bucket 與應用憑證，也未對外開放上傳 API；目前缺少設定時功能維持關閉。
+- 本項在 `972ee0f` 後進行，未 Push；提交 SHA 以 Git 紀錄為準。歷史登出 500 無新證據，未增加重現策略。
 
 ## 2026-11-13 M2 文件狀態查詢
 

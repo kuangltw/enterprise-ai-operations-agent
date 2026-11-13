@@ -1,6 +1,6 @@
 # Security Model（安全模型）v0.1
 
-> **安全設計基準，尚未通過完整安全稽核。** M1 已[有條件驗收通過](../testing/ACCEPTANCE.md)，歷史登出 500 的根因仍未確認。M2 文件 Metadata／狀態查詢在資料 SQL 中重驗 Tenant Membership、目前角色及指定使用者 ACL；文件上傳 API、檢索與 ERP 實際執行點授權仍待實作及驗收。
+> **安全設計基準，尚未通過完整安全稽核。** M1 已[有條件驗收通過](../testing/ACCEPTANCE.md)，歷史登出 500 的根因仍未確認。M2 文件 Metadata／狀態查詢在資料 SQL 中重驗 Tenant Membership、目前角色及指定使用者 ACL；文件上傳 API、檢索與 ERP 實際執行點授權仍待實作及驗收。文件儲存連線需另行提供只限私有 Bucket 的應用憑證；設定缺失時拒絕服務，不能將 MinIO Root 憑證交給 API。
 
 ## 1. Trust Boundary（信任邊界）
 

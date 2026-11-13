@@ -88,6 +88,11 @@ services:
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY:-}
       REDIS_URL: redis://redis:6379/0
       ERP_BASE_URL: http://demo-erp:8080
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:-}
+      MINIO_SECRET_KEY: ${MINIO_APP_SECRET_KEY:-}
+      MINIO_BUCKET: documents
+      MINIO_SECURE: "false"
     ports:
       - "127.0.0.1:8000:8000"
     depends_on:
