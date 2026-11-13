@@ -14,8 +14,15 @@
 
 ## 下一個任務
 
-1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為受控文件上傳流程：先確定預留物件鍵、資料庫交易、MinIO 寫入、重試對帳及失敗補償，再補 API、Contract／Integration Test；完成前不開放上傳端點。
+1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為預約後的 MinIO 寫入與狀態對帳：遇到不明結果須先核對物件，安全更新 `stored` 或保留待查狀態；再補 API、Contract／Integration Test。完成前不開放上傳端點。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
+
+## 2026-11-13 M2 文件上傳預約交易
+
+- 新增內部服務 `reserve_document_upload`，在 PostgreSQL 交易中重驗 User／Tenant／Membership 狀態與 `document.upload` 角色權限，按租戶及冪等鍵取得交易鎖，再建立文件、版本及建立者專屬 ACL。相同建立者、標題與 SHA256 重試回傳原預約；衝突請求拒絕。`viewer` 無上傳權限。此項尚未寫入 MinIO 或開放 API。
+- 在一次性 tmpfs PostgreSQL 從空白套用 Alembic 至 `0008_document_user_acl`，執行預約、上傳狀態、文件 ACL 讀取及角色政策測試：**10 passed、1 個既有棄用警告**。隔離容器以 `docker compose down` 清理，沒有刪除 Volume。未執行並行請求壓力測試；資料庫唯一約束仍是並行重複鍵的最後防線。
+- 上傳前準備資料重新核對大小、檔頭與 SHA256；未完成 MinIO 寫入、補償與索引排程之前，不應將預約視為已完成上傳，也不應暴露端點。歷史登出 500 無新證據，維持未重現／保留追蹤。
+- 起始本機與 `origin/main` 同為 `bdc7f80`，工作目錄乾淨；官方額度開始時 5 小時剩餘 52%、每週剩餘 93%。本項未 Push；提交 SHA 以 Git 紀錄為準。
 
 ## 2026-11-13 M2 單一使用者文件授權
 

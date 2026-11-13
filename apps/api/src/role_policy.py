@@ -8,16 +8,16 @@ from .auth import AuthError
 from .tenant_context import TenantContext, get_tenant_context
 
 Permission = Literal[
-    "tenant.read", "member.manage", "knowledge.ask", "inventory.read",
+    "tenant.read", "member.manage", "knowledge.ask", "document.upload", "inventory.read",
     "purchase.draft.create", "purchase.approve",
 ]
 
 _ALLOWED: dict[str, frozenset[str]] = {
-    "admin": frozenset({"tenant.read", "member.manage", "knowledge.ask", "inventory.read",
+    "admin": frozenset({"tenant.read", "member.manage", "knowledge.ask", "document.upload", "inventory.read",
                         "purchase.draft.create", "purchase.approve"}),
-    "manager": frozenset({"tenant.read", "knowledge.ask", "inventory.read",
+    "manager": frozenset({"tenant.read", "knowledge.ask", "document.upload", "inventory.read",
                           "purchase.draft.create", "purchase.approve"}),
-    "staff": frozenset({"tenant.read", "knowledge.ask", "inventory.read",
+    "staff": frozenset({"tenant.read", "knowledge.ask", "document.upload", "inventory.read",
                         "purchase.draft.create"}),
     "viewer": frozenset({"tenant.read", "knowledge.ask", "inventory.read"}),
 }
