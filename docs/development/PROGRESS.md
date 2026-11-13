@@ -17,6 +17,12 @@
 1. M2-01 下一項是上傳失敗補償與孤兒物件清理，須與同鍵恢復共用版本鎖並保護已儲存版本。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
+## 2026-11-13 強制風險評分與模型分流
+
+- `AGENTS.md` 定義任務初評、實作後依 Git Diff 重評、強制條件與 4 分升級門檻。Architect、Security Reviewer 依分流做設計、審查或修正重驗；Implementer、Tester 將新風險交回主代理。只有執行紀錄確認 Sol High 且審查完成，才能記為已審。
+- 依 [OpenAI 子代理文件](https://learn.chatgpt.com/docs/agent-configuration/subagents)使用專案指令與自訂角色的 `developer_instructions`、`model`、`model_reasoning_effort`。Python 3.12 `tomllib` 核對七個 TOML；Desktop 內建執行檔與獨立 CLI 的 `app-server --strict-config --print-startup-config` 均成功。Desktop 內建 App Server 新對話仍採 Terra Medium，並行上限為 2。
+- 新開唯讀對話以九個合成案例核對風險分流，九案結果符合預期，涵蓋 0 分強制升級、4 分升級、同列只計一次、實作後新風險、模型待驗、重大問題重驗及雙角色審查。測試只驗證分流判定，本輪未實際委派 Sol 審查。未執行 M2 業務測試；本輪僅調整開發規範，提交識別見 Git 紀錄。
+
 ## 2026-11-13 Codex Desktop 多代理調度
 
 - 新增 `.codex/config.toml` 及 `.codex/agents/` 下六個自訂角色，`AGENTS.md` 定義自動分工、高風險 Sol High 審查與主代理的測試、機密掃描及提交責任。專案預設 GPT-6.1 Terra Medium，每個對話最多同時開啟兩個子代理。
