@@ -60,6 +60,7 @@
 - `auth.py` 新增瀏覽器登入端點，將原 15 分鐘 JWT 放入 HttpOnly、Secure、SameSite=Strict Cookie，沿用資料庫驗證與撤銷。前端在 `api.ts`、`main.tsx` 依 `/auth/me` 恢復身分，從 `tenants.py`、`role_policy.py` 取得重驗的租戶與角色權限。分頁僅保存租戶選擇，API 持續檢查目前成員資格及資源授權。
 - `python scripts/testing/run_m1_e2e.py` 修正前 3 通過、2 失敗，修正後 **5 通過**。涵蓋登入、重新整理後身分與租戶、登出後無法恢復、跨租戶拒絕，以及模擬 503 可重試和 401 回到登入。一次性 PostgreSQL、Redis、MinIO 套用至 `0009_document_index_jobs`，`pytest -q -p no:cacheprovider` **53 通過、17 則相依套件棄用警告**，直接驗證資料庫工作階段到期、Cookie 登出撤銷及角色降權後的即時權限。`npm run build` 通過。
 - 正式部署依 [ADR 0006](../adr/0006-browser-session-cookie.md) 使用同來源 HTTPS。本輪瀏覽器以本機 loopback 驗證，正式 HTTPS 代理尚未驗證。期限仍為 15 分鐘，過期需登入。歷史登出 500 依既有紀錄追蹤。提交 SHA 以本輪 Git 紀錄為準，下一項依本檔 M2 工作清單。
+- 驗證缺失：提交 `2f81a51` 的 Chromium 測試只涵蓋新建的隔離環境，未從使用者實際操作的 `http://127.0.0.1:5173/` 驗證登入與重新整理。使用者回報 F5 仍登出後，確認該入口仍提供舊前端，且後端未提供 `/auth/session`。重建本機 Web／API 後，已從該網址確認新版前端與登入端點可達，實際登入後重新整理仍待在該入口驗證。後續前端變更須依 `AGENTS.md` 在使用者實際入口以瀏覽器驗證受影響流程，並回報測試環境與未驗項目。
 
 ## 2026-11-13 M2 單一使用者文件授權
 
