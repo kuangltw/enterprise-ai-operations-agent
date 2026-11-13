@@ -14,17 +14,28 @@
 
 ## 下一個任務
 
-1. M2-01 下一項切換為退役鍵登錄與預設 Dry Run 清理；本輪上傳失敗狀態第一切片待完成機密掃描及 Commit。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
+1. M2-01 繼續退役鍵登錄與 Dry Run 預覽：先核對未提交差異，完成降版修正後測試及 Sol 安全重驗。第一切片已提交 `7c61e1444a0d4b3275ffbdfc4606c0b963375419`。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
-## 2026-11-13 M2-01 上傳失敗狀態（第一切片，最終掃描及提交中）
+## 2026-11-13 Codex → agy 交接
+
+- Codex 五小時額度剩餘 14%，交接給 agy。第一切片已提交；第二切片未完成，仍有未提交修改。詳細狀態、驗證限制與接手步驟見 [HANDOFF.md](HANDOFF.md)。
+
+## 2026-11-13 M2-01 退役鍵預覽（未完成，額度停止）
+
+- 第二切片新增未提交的 `0010_document_retired_keys.py`、`document_cleanup_preview.py` 與 `test_document_cleanup_preview_postgres.py`，只建立退役鍵資料表及指定租戶的唯讀候選預覽；未切換鍵、連接 MinIO 或刪除物件。預覽可能包含進行中的上傳，不能作為刪除授權。
+- 初評命中跨系統一致性、資料刪除設計、交易鎖、並行、復原及租戶隔離強制條件；Migration／資料約束 +2、未影響三個產品模組或重要 API +0、規格經設計後明確 +0，總分 2，仍須升級。Architect 與 Security Reviewer 的 Sol High 前置設計及差異審查已完成。
+- 首版在隔離 tmpfs PostgreSQL 從空白套用 Migration 至 `0010`，預覽及上傳／ACL 六個測試檔 **10 passed、1 warning**。兩位審查者發現降版空表檢查與刪表之間可並行插入，屬提交阻擋；已改為同交易先取得排他鎖，Architect 靜態重驗通過。非空降版測試已配合 PostgreSQL 例外改用儲存點，但修正後測試、Security Reviewer 重驗及完整差異重評尚未執行。實際並行降版及離線 SQL 亦未驗證。
+- 官方五小時額度剩餘 14%，依停止政策不再啟動新工作。以上三個新檔及本進度檔保留未提交；尚未執行本切片 Gitleaks 或建立 Commit。下次先檢查額度、工作目錄與差異，再重跑隔離測試，完成安全重驗、文件更新、暫存掃描及提交。退役鍵實際切換、延遲 PUT／DELETE 對帳和孤兒清理均未實作。
+
+## 2026-11-13 M2-01 上傳失敗狀態（第一切片已提交）
 
 - 實作差異已加入 `complete_document_upload`：MinIO 寫入後只有重新讀取明確回報 `NoSuchKey` 時才將仍在版本鎖下的 `pending_upload`／`failed` 記為 `failed`；內容不符或讀取結果不明時保留原狀。`stored` 不會降級；資料庫提交結果不明會回 503，供同鍵重試重新讀取與對帳。`failed` 代表本次未確認成功且可重試，先前逾時的 PUT 仍可能晚到，故不是物件不存在的證明或清理授權。
 - 初評命中 PostgreSQL／MinIO 一致性、交易鎖、並行、冪等、復原及 Tenant／ACL 安全強制升級條件。加分為：無 Migration／資料約束 +0；在既有 503 契約內調整，未達影響至少三個模組的標準 +0；規格已有設計且非難重現錯誤 +0，合計 0 分但因強制條件升級。實作後依 Diff 重評，仍命中相同強制條件、加分 0 分。Architect 前置設計與 Security Reviewer Sol High 獨立差異審查均已完成；主代理 Code Review 已完成，未發現阻擋缺陷。Explorer 使用 GPT-6 Luna Low 完成唯讀追蹤。實際物件刪除仍須另行設計實作及獨立審查。
 - 在隔離 PostgreSQL／MinIO 容器（資料使用 tmpfs、合成測試資料、MinIO 測試應用帳號非 Root）套用 `alembic upgrade head` 至 `0009_document_index_jobs` 成功；兩個上傳測試檔共 **12 passed、1 warning**。首次收集測試因環境缺少 `python-multipart` 相依而失敗；改以目前 `requirements-dev.txt` 安裝測試相依後重跑通過。容器與測試資料已清理。
 - 另以隔離環境執行 PDF 上傳 API、ACL 與物件儲存回歸，共九個測試檔 **19 passed、1 warning**；未改動測試以放寬授權條件。此結果與前述兩個上傳測試檔分開記錄。
 - 測試涵蓋寫入失敗後同鍵恢復、`stored` 不降級、索引工作唯一性及提交結果不明。提交回應遺失由包裝 `Session.commit` 的故障注入模擬，並非真正資料庫連線中斷；因此不宣稱已驗證實際斷線後由全新連線重試。Security Reviewer 依 GPT-6.1 Sol High 執行紀錄完成差異審查，未發現阻擋缺陷；`failed` 仍可能遇到晚到的 MinIO PUT，禁止 Cleaner 僅依此狀態刪除。
-- 最終 Gitleaks 暫存掃描將於 Commit 前執行，掃描尚未完成。第一切片中文 Commit 尚待建立，Commit SHA 以後續 Git 紀錄為準。孤兒清理、退役鍵、延遲 PUT／DELETE 對帳、Cleaner 並行及 Dry Run 仍未實作或驗收；下一個小任務為退役鍵登錄與預設 Dry Run 清理，並須另行獨立安全審查。
+- 第一切片 Gitleaks 暫存掃描及提交 Hook 均掃描 7 個檔案通過；中文 Commit 為 `7c61e1444a0d4b3275ffbdfc4606c0b963375419`，未 Push。孤兒清理、退役鍵切換、延遲 PUT／DELETE 對帳及 Cleaner 並行仍未實作或驗收。
 
 ## 2026-11-13 強制風險評分與模型分流
 
