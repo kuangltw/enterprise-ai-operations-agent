@@ -17,6 +17,12 @@
 1. M1 有條件驗收已通過；登出 500 僅依[獨立追蹤紀錄](issues/LOGOUT-500.md)的重新開啟條件再調查。M2 下一個獨立工作為文件上傳 API 的邊界：驗證 multipart 請求及錯誤映射，加入 OpenAPI／Contract／E2E Test；索引任務建立與清理政策未完成前，不宣稱 RAG-T01 通過。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
+## 2026-11-13 M2 上傳交易模組可維護性
+
+- 依新版 `AGENTS.md` 的註解規範，針對目前開發的 `document_uploads.py` 補明 PostgreSQL／MinIO 無共同交易、預約與完成函式的前置條件、副作用、冪等重試及失敗語意。抽出共用的 PDF 完整性檢查與 User／Tenant／Membership 鎖定，避免兩條流程的授權規則日後分歧；未變更資料表或對外 API。
+- 一次性 tmpfs PostgreSQL／MinIO 從空白 Migration 後重跑上傳預約及完成整合測試 **2 passed**；容器與網路已清理。此項沒有補齊全部既有程式註解，範圍限正在修改的高風險模組。
+- 本項在 `93f327d` 後進行，未 Push；提交 SHA 以 Git 紀錄為準。
+
 ## 2026-11-13 M2 索引工作持久登錄
 
 - `0009_document_index_jobs` 為每個文件版本建立租戶隔離、唯一的索引工作紀錄。`complete_document_upload` 在已核對 MinIO 內容後，同筆 PostgreSQL 交易更新 `storage_status = stored` 並新增 `pending` 工作；同鍵重試使用唯一約束避免重複，寫入前失敗不登錄工作。

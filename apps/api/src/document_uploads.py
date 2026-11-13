@@ -1,4 +1,9 @@
-"""文件上傳的資料庫預約交易；物件儲存與發布由後續步驟處理。"""
+"""文件上傳的預約與儲存交易。
+
+PostgreSQL 保存權限、冪等鍵與索引工作；MinIO 保存原始 PDF。兩者沒有
+共同交易，因此寫入結果不明時先讀回對帳，再提交 `stored` 與待索引工作。
+版本發布及 Worker 消費由後續模組處理。
+"""
 
 from dataclasses import dataclass
 from hashlib import sha256
@@ -29,6 +34,7 @@ class StoredObjectMissing(FileNotFoundError):
 
 @dataclass(frozen=True)
 class ReservedUpload:
+    """預約版本的識別與狀態；`was_existing` 表示冪等重試。"""
     document_id: UUID
     version_id: UUID
     storage_key: str
@@ -36,29 +42,46 @@ class ReservedUpload:
     was_existing: bool
 
 
-def reserve_document_upload(db: Session, tenant_id: UUID, user_id: UUID,
-                            title: str, idempotency_key: UUID,
-                            prepared: PreparedPdf) -> ReservedUpload:
-    """重新查驗成員與角色，原子建立只有建立者可讀的待上傳文件。"""
-    normalized_title = title.strip()
-    if not normalized_title or len(normalized_title) > 255:
-        raise ValueError("文件標題不符合長度限制")
+def _validate_prepared(prepared: PreparedPdf) -> None:
+    """防止呼叫端直接建構不一致的 PreparedPdf，避免錯誤摘要入庫。"""
     if (prepared.size != len(prepared.data) or prepared.size > MAX_PDF_BYTES
             or not prepared.data.startswith(b"%PDF-")
             or prepared.sha256 != sha256(prepared.data).hexdigest()):
         raise ValueError("PDF 準備資料不一致")
-    try:
-        membership = db.execute(text("""
-            SELECT m.role FROM memberships AS m
-            JOIN tenants AS t ON t.id = m.tenant_id
-            JOIN users AS u ON u.id = m.user_id
-            WHERE m.tenant_id = :tenant_id AND m.user_id = :user_id
-              AND t.status = 'active' AND u.status = 'active'
-            FOR UPDATE OF m, t, u
-        """), {"tenant_id": str(tenant_id), "user_id": str(user_id)}).mappings().first()
-        if membership is None or not allows(membership["role"], "document.upload"):
-            raise UploadForbidden("沒有上傳文件的權限")
 
+
+def _lock_upload_member(db: Session, tenant_id: UUID, user_id: UUID) -> None:
+    """鎖定目前啟用的 User／Tenant／Membership，避免寫入期間權限變更。"""
+    membership = db.execute(text("""
+        SELECT m.role FROM memberships AS m
+        JOIN tenants AS t ON t.id = m.tenant_id
+        JOIN users AS u ON u.id = m.user_id
+        WHERE m.tenant_id = :tenant_id AND m.user_id = :user_id
+          AND t.status = 'active' AND u.status = 'active'
+        FOR UPDATE OF m, t, u
+    """), {"tenant_id": str(tenant_id), "user_id": str(user_id)}).mappings().first()
+    if membership is None or not allows(membership["role"], "document.upload"):
+        raise UploadForbidden("沒有上傳文件的權限")
+
+
+def reserve_document_upload(db: Session, tenant_id: UUID, user_id: UUID,
+                            title: str, idempotency_key: UUID,
+                            prepared: PreparedPdf) -> ReservedUpload:
+    """預約新文件或回傳同鍵、同建立者與內容的既有預約。
+
+    此函式自行提交或回滾 DB Session。`prepared` 由 `prepare_pdf` 取得；
+    重新核對內容後鎖定成員與租戶，再以租戶加冪等鍵序列化預約。
+    新文件只授予建立者 ACL，尚無 MinIO 物件。權限不足與同鍵內容衝突
+    分別拋出 UploadForbidden、IdempotencyConflict；資料庫錯誤向上傳遞。
+    """
+    normalized_title = title.strip()
+    if not normalized_title or len(normalized_title) > 255:
+        raise ValueError("文件標題不符合長度限制")
+    _validate_prepared(prepared)
+    try:
+        _lock_upload_member(db, tenant_id, user_id)
+
+        # 同租戶同鍵請求只能有一筆預約；唯一約束仍是最後防線。
         db.execute(text("""
             SELECT pg_advisory_xact_lock(hashtextextended(:lock_key, 0))
         """), {"lock_key": f"document-upload:{tenant_id}:{idempotency_key}"})
@@ -112,22 +135,16 @@ def complete_document_upload(db: Session, client: Minio, bucket: str,
                              tenant_id: UUID, user_id: UUID,
                              idempotency_key: UUID,
                              prepared: PreparedPdf) -> StoredPdf:
-    """鎖定預約版本，對帳後寫入 MinIO，最後標記為已儲存。"""
-    if (prepared.size != len(prepared.data) or prepared.size > MAX_PDF_BYTES
-            or not prepared.data.startswith(b"%PDF-")
-            or prepared.sha256 != sha256(prepared.data).hexdigest()):
-        raise ValueError("PDF 準備資料不一致")
+    """對帳預約版本，必要時寫入 MinIO，再原子登錄儲存與索引工作。
+
+    此函式自行提交或回滾 DB Session，外部 I/O 期間持有成員與版本鎖。
+    寫入回應遺失時讀回核對；無法確認則保留原 DB 狀態並拋出錯誤，
+    呼叫端可用相同冪等鍵重試。已標示 stored 卻缺物件時拒絕回報成功。
+    不發送 Celery 工作，也不發布 current_version。
+    """
+    _validate_prepared(prepared)
     try:
-        membership = db.execute(text("""
-            SELECT m.role FROM memberships AS m
-            JOIN tenants AS t ON t.id = m.tenant_id
-            JOIN users AS u ON u.id = m.user_id
-            WHERE m.tenant_id = :tenant_id AND m.user_id = :user_id
-              AND t.status = 'active' AND u.status = 'active'
-            FOR UPDATE OF m, t, u
-        """), {"tenant_id": str(tenant_id), "user_id": str(user_id)}).mappings().first()
-        if membership is None or not allows(membership["role"], "document.upload"):
-            raise UploadForbidden("沒有上傳文件的權限")
+        _lock_upload_member(db, tenant_id, user_id)
         row = db.execute(text("""
             SELECT v.id AS version_id, v.document_id, v.storage_key,
                    v.storage_status, v.sha256, d.owner_id, d.status
