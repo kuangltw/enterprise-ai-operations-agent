@@ -23,6 +23,14 @@
 1. M2-01 第三切片放行前，先驗證舊鍵寫入排空、正式部署的租戶資料面隔離、永久墓碑的 Migration 與容錯還原，以及正式入口共用鎖序。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
+## 2026-11-14 Migration 0011 獨立程式碼檢查與後續決策
+
+- 遠端 `main` 已含本機原始交付 Commit `020c5d1aabfda096a753298b5acff878cc041fc6`；Migration `0011`、對應測試與設計文件已可讀取。此處記錄文件審查結論，不宣稱重新執行本機 PostgreSQL／MinIO 隔離測試。
+- 已確認 `protect_document_version_identity` Trigger 禁止修改 `document_versions.storage_key`；目前設計文件的「同一版本換鍵」路徑與此不可變條件衝突。下一步先比較「建立新 Document Version」與「受控原子換鍵」兩種方案，以 ADR 決定後才進入實作；禁止直接移除 Trigger、停用約束或建立正式 DELETE 入口。
+- 下一階段第一任務：由 Sol High Architect 設計並以隔離 PostgreSQL 原型測試兩方案，獨立 Security Reviewer 驗證外鍵、世代、共同鎖序、冪等、索引／ACL／發布相容性及失敗回滾。原型只允許合成資料，不可操作正式資料或 MinIO DELETE。
+- 建議建立 GitHub Actions 的 `0011` 專項 CI：空庫與 0010 升級、永久退役／複合外鍵／並行測試，以及無 DELETE 的 PDF 上傳／ACL 回歸。目前 **CI 專項尚未建立**；原 Commit 的通用建置結果不得視為 0011 專項驗收。
+- 正式 Cleaner DELETE 繼續封鎖，`waiting_fence` 不能當刪除授權；舊 PUT 寫入排空、部署角色與租戶資料面隔離、墓碑備份還原／故障切換、正式鎖序與恢復證據仍待完成。下階段交付 ADR、隔離測試報告、CI 設計與獨立審查結果，不自動 Git Push。
+
 ## 2026-11-14 M2-01 正式鍵登錄資料庫基礎
 
 - 本輪續接 `a52a45d` 的未提交草稿。初評與差異重評均命中租戶隔離、交易、鎖、並行及高風險 Migration 強制條件；Migration／資料約束 +2、重要 API 或三個業務模組 +0、規格不明 +0，合計 2 分。主代理為 Terra Medium，Architect 與 Security Reviewer 的實際執行回合 `01a1da97-936b-7ff2-822e-a8929fb9b542`、`01a1da9a-9f54-7331-bf88-b69e4cab5dd2` 核對為 Sol High；Security Reviewer 對 RLS 修正重驗回合 `01a1da9f-14d7-7bc0-91be-23c481c09160` 亦為 Sol High，結論為 CONDITIONAL PASS，未發現 Critical／High。主代理依完整差異檢查註解、約束與測試。
