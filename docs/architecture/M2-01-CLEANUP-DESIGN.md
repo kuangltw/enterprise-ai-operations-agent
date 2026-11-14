@@ -4,15 +4,10 @@
 
 ## 下一階段決策關卡：Registry 0011 與受控換鍵
 
-**狀態：已確認設計衝突；僅准進行原型與測試，不得直接實作正式 Cleaner DELETE。**
-
-- Migration `0011_document_key_registry` 的 `protect_document_version_identity` Trigger 禁止更新 `document_versions.storage_key`，版本的 `storage_generation` 又由此 Key 生成。現有版本身分不變條件與本文件原先描述的「同一版本原子換鍵」直接衝突；既有提案**尚未具備可執行的正式輪替路徑**。
-- 先由架構審查比較兩種可行方案：**A. 建立新的 Document Version 並使用新的唯一 Storage Key**（保留舊版本與歷史身份）；**B. 受控安全操作允許現有 Version 換鍵**（必須修改 Trigger、外鍵配合、權限與所有寫入入口，並維持同一交易內可證明的不變條件）。不得預設選 B，亦不得直接停用 Trigger 或降低 Registry 外鍵。
-- 若選 A，需檢查既有 API 的版本號、文件狀態、索引工作、ACL、Idempotency、引用歷程及原版本失敗狀態是否能一致表達新版本；必須同時證明舊 Key 的退役保護與新版本承接操作可原子提交，不能任意複製已發布版本。
-- 若選 B，須以隔離 PostgreSQL 原型驗證 `DEFERRABLE` 外鍵、Trigger、同交易新鍵登錄／版本條件更新／舊鍵退役、並行鎖序、權限及回滾；禁止以 `DISABLE TRIGGER`、Superuser 或略過約束作為執行方案。
-- 審查必須產出 ADR，列出方案取捨、威脅模型、Migration 相容性、Rollback 限制、Lock Ordering（鎖定順序）、舊上傳請求的世代比對、測試矩陣與獨立 Sol High 審查結論。完成設計驗收後，才允許範圍受控的非 DELETE 原型。
-- 建議新增 GitHub Actions **Key Registry 0011 專項 CI**：使用一次性隔離 PostgreSQL、合成資料、非正式憑證，重跑空庫／既有 0010 升級、複合外鍵與永久退役、競態及不執行 MinIO DELETE 的既有上傳／ACL 測試。現有通用 M1 CI 不能替代此專項驗證；CI 建置與測試環境配置必須先經安全審查。
-- 本階段維持 `waiting_fence`、禁止正式 Cleaner DELETE、禁止對正式 Bucket 測試刪除；寫入排空、部署權限、備份還原及故障復原的放行條件維持未解除。
+- [換鍵 ADR](ADR-M2-01-KEY-ROTATION.md) 記錄 A／B 取捨及原型證據。建議以受控的同版本換鍵恢復未完成上傳。0011 本身仍禁止修改版本儲存鍵，正式能力需要獨立前向 Migration 與應用程式接線。
+- 原型在一次性 0011 資料庫保留 Trigger 與外鍵，限定專用角色依序登錄新鍵、切換版本、退役原鍵並留下 `waiting_fence` 操作結果。證據涵蓋真實 COMMIT 回應遺失及鎖等待，實驗未接入現行 Uploader。
+- [Key Registry 0011 專項 Workflow](../../.github/workflows/key-registry.yml) 已在本機透過隔離執行器驗證。GitHub Actions 遠端執行待 Push 後確認。
+- 正式 Cleaner DELETE 持續封鎖。尚待證明寫入屏障與排空、部署角色與租戶資料面隔離、完整鎖序、備份還原及刪除授權／對帳。
 
 ## 範圍、不變條件與威脅
 

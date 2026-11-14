@@ -23,6 +23,16 @@
 1. M2-01 第三切片放行前，先驗證舊鍵寫入排空、正式部署的租戶資料面隔離、永久墓碑的 Migration 與容錯還原，以及正式入口共用鎖序。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
+## 2026-11-15 M2-01 換鍵決策、隔離原型與 0011 專項 CI
+
+- 本機乾淨的 `main` 從 `020c5d1` 快轉至 `a1ce463`，同步三份遠端文件。官方額度起始 5 小時剩 98%、每週剩 54%，未使用重設額度。
+- 以 [換鍵 ADR](../architecture/ADR-M2-01-KEY-ROTATION.md) 記錄方案 B 的推薦範圍、與方案 A 的取捨及正式門檻。方案 A 適合真正新增文件版本，但仍需要前向 Migration 才能保留舊版本並退役其鍵。0011 原始 Migration 維持發布時的資料形狀與限制。
+- 換鍵初評命中租戶隔離、交易、鎖、並行、冪等及復原。原型約束 +2，重要 API 或三個正式模組 +0，版本／儲存身分規格待決 +2，共 4 分。專項 CI 命中部署隔離及驗證交易／並行的審查條件；資料約束、API 與未知規格均 +0。差異重評確認正式 Migration 及應用寫入行為沒有變更，仍由 Architect 和 Security Reviewer 依實際 SQL、測試及 CI 隔離完成差異審查。
+- `python scripts/testing/run_key_registry.py --rotation` 在全新 PostgreSQL 16.15、套用 0011 後執行 **14 passed**。涵蓋實際鎖等待、操作重播、錯歸屬拒絕、回滾、真實 COMMIT 回應丟失、禁止舊世代完成及索引防重。
+- `python scripts/testing/run_key_registry.py --pull` 固定 digest 取得 Python、PostgreSQL、MinIO，專項結果 **9 + 9 + 11 passed，0 skipped，3 個既有棄用警告**。PDF／ACL 回歸使用 Bucket 限定的合成 MinIO 帳號，HTTP 傳輸拒送 DELETE。Workflow 位於 `.github/workflows/key-registry.yml`，遠端結果待後續 Push。
+- Sol High Architect 確認原型範圍可交付。Sol High Security Reviewer 結論 **CONDITIONAL PASS**，隔離原型與專項 CI 無 Critical／High 交付阻擋。正式 B 上線仍有 High，包含目前儲存完成／失敗缺少受控的 attempt／generation 比對，以及舊程式清退、正式角色拆權與歷史發布證據待驗。提交 SHA 與掃描結果以本輪 Git 提交紀錄及交付回報為準。
+- 下一切片做 attempt／世代契約、共同鎖序、部署權限與前向 Migration 的設計及隔離證明，通過獨立審查後才可將 B 列為正式實作基準。尚需寫入屏障與排空、正式租戶資料面隔離、可信 Bucket 身分、墓碑還原及故障切換、刪除授權及對帳。舊鍵仍處於 `waiting_fence`，正式 Cleaner DELETE 持續封鎖。
+
 ## 2026-11-14 Migration 0011 獨立程式碼檢查與後續決策
 
 - 遠端 `main` 已含本機原始交付 Commit `020c5d1aabfda096a753298b5acff878cc041fc6`；Migration `0011`、對應測試與設計文件已可讀取。此處記錄文件審查結論，不宣稱重新執行本機 PostgreSQL／MinIO 隔離測試。

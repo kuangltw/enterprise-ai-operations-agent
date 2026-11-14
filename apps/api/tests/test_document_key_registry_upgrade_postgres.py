@@ -141,7 +141,7 @@ def test_z_alembic_upgrade_with_committed_existing_data():
     api_dir = Path(__file__).resolve().parents[1]
     config = Config(str(api_dir / "alembic.ini"))
     config.set_main_option("script_location", str(api_dir / "migrations"))
-    command.upgrade(config, "head")
+    command.upgrade(config, "0011_document_key_registry")
     with engine.connect() as db:
         assert db.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == "0011_document_key_registry"
         assert db.execute(text("SELECT state FROM document_storage_keys WHERE storage_key=:key"), owner).scalar_one() == "live"

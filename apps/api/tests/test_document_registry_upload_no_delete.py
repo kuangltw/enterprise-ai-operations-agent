@@ -1,13 +1,20 @@
 """在一次性 PostgreSQL／MinIO 驗證上傳及 ACL，不執行物件刪除。"""
 
 import os
+import secrets
+import time
+from urllib.error import URLError
+from urllib.request import urlopen
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from minio import Minio
+from minio.credentials import StaticProvider
+from minio.minioadmin import MinioAdmin
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from urllib3 import PoolManager
 
 from src import documents
 from src.auth import get_db, get_signing_key
@@ -23,11 +30,47 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def test_pdf_upload_retry_and_acl_revocation_with_registry(monkeypatch):
-    storage = Minio(os.environ["MINIO_ENDPOINT"], access_key=os.environ["MINIO_ACCESS_KEY"],
-                    secret_key=os.environ["MINIO_SECRET_KEY"], secure=False)
+@pytest.fixture
+def isolated_bucket():
+    """以合成管理帳號布建，API 僅拿到測試 Bucket 的讀寫權限。"""
+    endpoint = os.environ["MINIO_ENDPOINT"]
+    assert endpoint == "minio:9000"
+    for _ in range(40):
+        try:
+            with urlopen(f"http://{endpoint}/minio/health/ready", timeout=1):
+                break
+        except (URLError, TimeoutError):
+            time.sleep(0.5)
+    else:
+        pytest.fail("一次性 MinIO 未就緒")
+
+    class NoDeleteClient(PoolManager):
+        def urlopen(self, method, url, *args, **kwargs):
+            assert method.upper() != "DELETE", "專項 CI 不得發送 HTTP DELETE"
+            return super().urlopen(method, url, *args, **kwargs)
+
+    http = NoDeleteClient()
+    root = os.environ["MINIO_ROOT_USER"]
+    credential = os.environ["MINIO_ROOT_PASSWORD"]
+    bootstrap = Minio(endpoint, access_key=root, secret_key=credential, secure=False, http_client=http)
+    admin = MinioAdmin(endpoint=endpoint, credentials=StaticProvider(root, credential),
+                       secure=False, http_client=http)
     bucket = f"registry-{uuid4().hex}"
-    storage.make_bucket(bucket)
+    bootstrap.make_bucket(bucket)
+    access, credential = f"test-{uuid4().hex}", secrets.token_hex(24)
+    admin.user_add(access, credential)
+    admin.policy_add(bucket, policy={"Version": "2012-10-17", "Statement": [
+        {"Effect": "Allow", "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+         "Resource": [f"arn:aws:s3:::{bucket}"]},
+        {"Effect": "Allow", "Action": ["s3:GetObject", "s3:PutObject"],
+         "Resource": [f"arn:aws:s3:::{bucket}/*"]},
+    ]})
+    admin.policy_set(bucket, user=access)
+    return Minio(endpoint, access_key=access, secret_key=credential, secure=False, http_client=http), bucket
+
+
+def test_pdf_upload_retry_and_acl_revocation_with_registry(monkeypatch, isolated_bucket):
+    storage, bucket = isolated_bucket
     tenant, user = uuid4(), uuid4()
     email, password = f"{uuid4().hex}@example.invalid", "synthetic-password-123"
     with engine.connect() as connection, connection.begin() as transaction:
@@ -36,6 +79,8 @@ def test_pdf_upload_retry_and_acl_revocation_with_registry(monkeypatch):
                            {"id": user, "email": email, "hash": hash_password(password)})
         connection.execute(text("INSERT INTO memberships (tenant_id, user_id, role) VALUES (:tenant, :user, 'staff')"),
                            {"tenant": tenant, "user": user})
+        # API 使用外層測試交易的 savepoint，立即檢查 FK 才能覆蓋提交時的不變條件。
+        connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
 
         def override_db():
             with Session(bind=connection, join_transaction_mode="create_savepoint") as db:

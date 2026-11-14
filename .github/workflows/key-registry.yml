@@ -1,0 +1,21 @@
+name: Key Registry 0011 專項驗證
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  key-registry:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: 驗證空庫、0010 升級、鍵約束與 PDF／ACL
+        run: python3 scripts/testing/run_key_registry.py --pull
