@@ -23,6 +23,20 @@
 1. M2-01 第三切片放行前，先驗證舊鍵寫入排空、正式部署的租戶資料面隔離、永久墓碑的 Migration 與容錯還原，以及正式入口共用鎖序。RAG-T01 仍待驗收。歷史瀏覽器登出 500 依[追蹤紀錄](issues/LOGOUT-500.md)保留。
 2. 每完成小任務更新本檔：日期、檔案、測試指令、執行結果、Commit SHA、資安風險及下一項工作。
 
+## 2026-11-14 M2-01 正式鍵登錄資料庫基礎
+
+- 本輪續接 `a52a45d` 的未提交草稿。初評與差異重評均命中租戶隔離、交易、鎖、並行及高風險 Migration 強制條件；Migration／資料約束 +2、重要 API 或三個業務模組 +0、規格不明 +0，合計 2 分。主代理為 Terra Medium，Architect 與 Security Reviewer 的實際執行回合 `01a1da97-936b-7ff2-822e-a8929fb9b542`、`01a1da9a-9f54-7331-bf88-b69e4cab5dd2` 核對為 Sol High；Security Reviewer 對 RLS 修正重驗回合 `01a1da9f-14d7-7bc0-91be-23c481c09160` 亦為 Sol High，結論為 CONDITIONAL PASS，未發現 Critical／High。主代理依完整差異檢查註解、約束與測試。
+- `0011_document_key_registry` 建立永久鍵登錄、完整 owner／generation／live 複合外鍵、單向退役及禁止刪除／復活；既有版本插入由觸發器同交易登錄，版本儲存身分暫不可變更。舊資料不相容、舊墓碑表明確 ACL／RLS 或擁有者不同時安全拒絕升級；一律拒絕 downgrade。並未實作換鍵服務或 Cleaner。
+- 實際執行 `python scripts/testing/run_key_registry.py`：一次性 PostgreSQL 的舊版 0010 測試 **9 passed**，既有資料升級與拒絕案例 **9 passed**；空庫升級至 0011 後的完整 Python、PostgreSQL、Redis 與無 DELETE PDF／ACL 回歸 **68 passed、23 skipped、20 warnings**。跳過項含只適用 0010 的案例、需專用舊版資料庫的升級測試，以及會發送 MinIO DELETE 的舊整合案例；舊版案例與升級測試已在前述隔離資料庫另行執行。警告為既有棄用提示。測試 MinIO 是一次性 tmpfs 與合成 root 憑證，不證明正式租戶資料面隔離；未執行 MinIO DELETE。
+- 備份／還原演練、正式服務角色拆分與實際部署權限仍未驗證；舊時間點還原須隔離寫入並對帳全部永久鍵。正式 Cleaner DELETE 仍須可靠排空舊 PUT、正式資料面隔離、完整輪替鎖序、故障恢復與獨立審查；`waiting_fence` 不代表刪除授權。本輪未 Push，提交 SHA 與掃描結果以 Git 紀錄及本輪交付為準。
+
+## 2026-11-13 M2-01 正式鍵登錄（暫停紀錄）
+
+- 範圍為 PostgreSQL Registry、Migration 與測試，不授權 MinIO DELETE。初評命中租戶隔離、交易、鎖、並行及高風險 Migration 強制條件；Migration／資料約束 +2、重要 API 或三個模組 +0、規格不明 +0，合計 2 分。主代理為 Terra Medium；Architect 與 Security Reviewer 的執行紀錄分別確認 Sol High。
+- 未追蹤草稿 `0011_document_key_registry.py` 與 `test_document_key_registry_postgres.py` 尚未完成審查，不可部署或提交。空白隔離 PostgreSQL 升級至 0011 成功；初版資料庫測試 6 passed，惟其後 Migration 增加 search_path 與 row_security 設定，必須重跑。首次測試因映像缺少 pytest 未執行；以一次性容器安裝既有開發依賴後重跑，無 MinIO 操作。
+- 安全審查發現 READ COMMITTED 舊快照、版本身分變更、trigger 執行權限與 schema 遮蔽風險；草稿已修改，最終差異及新增修改仍須獨立重驗。既有資料升級及拒絕不合規資料、SET CONSTRAINTS IMMEDIATE、非 owner 角色、無 DELETE 的 PDF／ACL 回歸、備份還原條件、完整掃描與 Hook 皆未完成。不得宣稱 Registry 已驗收。
+- 正式 Cleaner DELETE 仍封鎖；需可靠排空舊寫入、實際租戶資料面隔離、正式角色拆權、完整鍵墓碑備份／復原及受控鎖序與故障恢復證據。禁止將 waiting_fence 視為刪除授權。
+
 ## 2026-11-13 M2-01 儲存安全性實證
 
 - 範圍與差異限 `scripts/testing/storage_safety` 的五個隔離測試原型及兩份紀錄。初評及差異重評共 2 分（隔離約束原型 +2、正式模組與 API +0、規格不明或難重現 +0），命中跨系統一致性、交易鎖、租戶隔離、並行、冪等、復原及刪除的強制升級條件。主代理執行實驗，Architect 與 Security Reviewer 以核對過的 Sol High 回合完成審查。

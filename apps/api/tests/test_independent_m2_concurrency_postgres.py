@@ -17,6 +17,9 @@ pytestmark = pytest.mark.skipif(os.getenv("RUN_POSTGRES_TESTS") != "1", reason="
 
 @pytest.fixture
 def committed_version():
+    with engine.connect() as connection:
+        if connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() != "0010_document_retired_keys":
+            pytest.skip("此舊版墓碑鎖定測試僅適用於 0010")
     tenant, user, document, version = (uuid4() for _ in range(4))
     key = f"{tenant}/{document}/{version}/{uuid4()}.pdf"
     params = {"tenant": tenant, "user": user, "document": document, "version": version,

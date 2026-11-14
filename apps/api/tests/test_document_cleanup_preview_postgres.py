@@ -24,6 +24,8 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def seeded():
     with engine.connect() as connection, connection.begin() as outer:
+        if connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one() != "0010_document_retired_keys":
+            pytest.skip("此舊版墓碑可寫入與降版測試僅適用於 0010")
         user, tenant_a, tenant_b = uuid4(), uuid4(), uuid4()
         connection.execute(text("""
             INSERT INTO users (id, email, password_hash)

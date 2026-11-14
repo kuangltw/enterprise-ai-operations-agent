@@ -34,14 +34,16 @@ def test_upload_state_and_idempotency_are_tenant_scoped():
                        "owner_id": str(user_id)})
 
             def insert_version(tenant_id, document_id, version, idempotency_key=None):
+                version_id = uuid4()
                 return connection.execute(text("""
                     INSERT INTO document_versions
                     (id, tenant_id, document_id, version, storage_key, sha256, idempotency_key)
-                    VALUES (:id, :tenant_id, :document_id, :version, 'synthetic/key',
+                    VALUES (:id, :tenant_id, :document_id, :version, :storage_key,
                             :sha256, :idempotency_key)
                     RETURNING storage_status
-                """), {"id": str(uuid4()), "tenant_id": str(tenant_id),
+                """), {"id": str(version_id), "tenant_id": str(tenant_id),
                        "document_id": str(document_id), "version": version,
+                       "storage_key": f"{tenant_id}/{document_id}/{version_id}/{uuid4()}.pdf",
                        "sha256": "a" * 64,
                        "idempotency_key": str(idempotency_key) if idempotency_key else None}).scalar_one()
 

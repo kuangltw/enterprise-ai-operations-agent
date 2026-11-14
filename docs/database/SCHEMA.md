@@ -1,6 +1,6 @@
 # PostgreSQL 資料庫 Schema（結構）規格 v0.1
 
-> **整體仍為設計規格。** M1 的 `tenants`、`users`、`memberships`、`sessions` 與 Demo ERP 基礎資料表已有 Migration；M2 已有 `0006_documents` 至 `0009_document_index_jobs` 的文件、ACL、儲存狀態與索引工作登錄 Migration。其餘資料表仍未實作。詳見 [M1-01 驗證紀錄](../development/M1-01-VERIFICATION.md) 與 [開發進度](../development/PROGRESS.md)。建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
+> **整體仍為設計規格。** M1 的 `tenants`、`users`、`memberships`、`sessions` 與 Demo ERP 基礎資料表已有 Migration；M2 文件、ACL、上傳狀態、索引工作及鍵登錄以 Migration 管理。Registry 的最新實作與測試狀態見下方「鍵登錄實作狀態」及[開發進度](../development/PROGRESS.md)。其餘資料表仍未實作。詳見 [M1-01 驗證紀錄](../development/M1-01-VERIFICATION.md)。建議 PostgreSQL 16+。識別碼使用 UUID、時間使用 `TIMESTAMPTZ`（UTC）、金額與數量使用 `NUMERIC`。
 
 ## 1. 資料庫邊界
 
@@ -186,7 +186,7 @@ CREATE TABLE document_chunks (
 
 必要不變條件：發佈的 `current_version` 必須存在、索引為 `ready`；Owner（擁有者）必須是同 Tenant 的成員；重複 SHA256 應以交易鎖及明確版本政策處理。Qdrant Payload（負載欄位）應帶 `tenant_id`、`document_id`、`version_id`、`chunk_id`、`allowed_roles`。檢索後仍需由 PostgreSQL 重新檢查 ACL。
 
-目前資料庫只保證 `current_version` 指向現有且同租戶的版本、儲存狀態值有效，以及同租戶非空冪等鍵不重複。既有版本在 Migration 後保守標為 `pending_upload`，不能據此判定物件已存在；上傳流程須先對帳 MinIO 才可標為 `stored`。`failed` 僅代表某次上傳尚未確認成功、允許以同一冪等鍵重試；由於先前逾時的 MinIO PUT 可能晚到，`failed` 不代表物件不存在，也不能作為刪除授權。資料庫提交結果不明時，須以同鍵重新讀取狀態並對帳。孤兒物件候選登錄、退役鍵及安全清理尚未實作，無法以目前 Schema 安全辨認或刪除候選物件。**`ready` 後發布、Owner 成員資格、同 SHA256 去重與檢索時 ACL 重驗尚未實作**。現行單一文件 Metadata 讀取已有 Tenant Membership 與 ACL 檢查；在對應 API／交易測試完成前，不可開放原文讀取或知識檢索。
+目前資料庫保證 `current_version` 指向現有且同租戶的版本、儲存狀態值有效，以及同租戶非空冪等鍵不重複；`0011` 鍵登錄限制詳見第 8 節。既有版本在 Migration 後保守標為 `pending_upload`，不能據此判定物件已存在；上傳流程須先對帳 MinIO 才可標為 `stored`。`failed` 僅代表某次上傳尚未確認成功、允許以同一冪等鍵重試；由於先前逾時的 MinIO PUT 可能晚到，`failed` 不代表物件不存在，也不能作為刪除授權。資料庫提交結果不明時，須以同鍵重新讀取狀態並對帳。孤兒物件候選登錄、鍵輪替及安全清理尚未實作，無法以目前 Schema 安全辨認或刪除候選物件。**`ready` 後發布、Owner 成員資格、同 SHA256 去重與檢索時 ACL 重驗尚未實作**。現行單一文件 Metadata 讀取已有 Tenant Membership 與 ACL 檢查；在對應 API／交易測試完成前，不可開放原文讀取或知識檢索。
 
 ## 5. Agent 執行歷程
 
@@ -346,7 +346,19 @@ M1 的商品、倉庫、庫存三張表已由 **EF Core Migration（資料庫結
 
 ERP 端使用 PostgreSQL Transaction（交易）與 Unique Constraint（唯一約束）保證同一冪等鍵不重複產生採購單。庫存並行更新使用可驗證的版本控制，不依賴 LLM。
 
-## 8. 待實作營運資料表與 Migration 限制
+## 8. 鍵登錄實作狀態（Migration `0011_document_key_registry`）
+
+本節記錄 Migration 與隔離測試證據；正式環境的角色配置及備份還原仍須另行驗證。
+
+- `document_storage_keys` 以固定邏輯 `namespace = 'documents'` 和完整 `storage_key` 作為全域唯一身分，並記錄 Tenant、Document、Version、Generation 與 `live`／`retired` 狀態。Generation 沿用 canonical key 尾端 UUID；這是世代唯一識別，不能推論其時間先後或歷史寫入排空。
+- `document_versions` 的生成欄位以複合外鍵指向完全相符且狀態固定為 `live` 的 Registry 列。資料庫觸發器在版本建立交易內登錄 Live Key；版本儲存身分不可更新。Registry 禁止身分變更、退役後復活、列刪除及 TRUNCATE；退役只允許 `live → retired`。
+- Migration 將 `0010` 現有版本鍵與退役紀錄回填至 Registry，並以不可自動更新的同名 View 保留舊預覽讀取介面。重複鍵、非 canonical key、現用鍵與墓碑衝突、舊墓碑表或欄位存在明確 ACL、啟用 RLS、舊表擁有者與遷移角色不同、非 READ COMMITTED 交易或鎖無法立即取得時，Migration fail closed；不自動更改不合規業務資料。Migration 固定操作 `public` Schema，downgrade 明確拒絕，以保留鍵身分與墓碑。
+- 一次性隔離 PostgreSQL 已驗證空庫升級、既有 `0010` 資料回填、衝突時交易回滾、舊墓碑唯讀相容 View、鎖競爭、非預設隔離級別、非 owner 權限、退役限制及拒絕 downgrade。一次性隔離 MinIO／PostgreSQL 已跑 PDF 上傳、同冪等鍵重試與 ACL 撤銷回歸；測試沒有呼叫 MinIO DELETE。測試指令、數量及警告以 `PROGRESS.md` 的當輪紀錄為準。
+- 現有 Compose 的 API 與 Migration 共用資料庫特權帳號；本切片沒有完成正式服務角色拆分，也未驗證正式環境 Preview 角色的 SELECT 權限部署。正式環境須控管新物件的預設權限；資料庫擁有者及具停用觸發器權限者可繞過一般防護。
+- 備份必須在同一一致性時間點包含完整 Schema 與資料、Registry、版本、外鍵、觸發器、必要權限及永久墓碑。不可把只有部分資料表的 data-only 備份直接附加到已啟用觸發器的現有資料庫；舊時間點還原或落後故障切換後，須隔離寫入、發布及刪除，補齊永久鍵紀錄並完成對帳後才能恢復服務。
+- Registry 不提供鍵輪替／恢復服務，也不實作 Cleaner 或物件 DELETE。`waiting_fence` 不是刪除授權；可靠排空舊 PUT、正式租戶資料面隔離與故障復原仍是未解除的放行條件。
+
+## 9. 待實作營運資料表與 Migration 限制
 
 `background_jobs`、`audit_logs`、`llm_usage`、`erp_tool_calls` 用於工作、稽核、成本與工具歷程。所有 Tenant 資料需補齊複合 `(tenant_id,id)` FK 或等效強制不變條件，並評估 PostgreSQL RLS（資料列層級安全）。
 

@@ -86,14 +86,15 @@ def test_document_status_shows_latest_version_only_to_acl_member(monkeypatch):
             for version, storage_status, indexing_status in (
                 (1, "stored", "ready"), (2, "pending_upload", "pending"),
             ):
+                version_id = uuid4()
                 connection.execute(text("""
                     INSERT INTO document_versions
-                        (tenant_id, document_id, version, storage_key, sha256,
+                        (id, tenant_id, document_id, version, storage_key, sha256,
                          storage_status, indexing_status)
-                    VALUES (:tenant_id, :document_id, :version, :storage_key,
+                    VALUES (:id, :tenant_id, :document_id, :version, :storage_key,
                             :sha256, :storage_status, :indexing_status)
-                """), {"tenant_id": str(tenant_id), "document_id": str(document_id),
-                       "version": version, "storage_key": f"synthetic/{version}",
+                """), {"id": str(version_id), "tenant_id": str(tenant_id), "document_id": str(document_id),
+                       "version": version, "storage_key": f"{tenant_id}/{document_id}/{version_id}/{uuid4()}.pdf",
                        "sha256": "a" * 64, "storage_status": storage_status,
                        "indexing_status": indexing_status})
             connection.execute(text("""

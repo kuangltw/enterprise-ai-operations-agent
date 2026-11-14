@@ -38,9 +38,10 @@ def test_document_versions_and_acl_stay_in_tenant():
                     connection.execute(text("""
                         INSERT INTO document_versions
                         (id, tenant_id, document_id, version, storage_key, sha256)
-                        VALUES (:id, :tenant_id, :document_id, 1, 'synthetic/key', :sha256)
+                        VALUES (:id, :tenant_id, :document_id, 1, :storage_key, :sha256)
                     """), {"id": str(version_id), "tenant_id": str(tenant_b),
-                           "document_id": str(document_id), "sha256": "a" * 64})
+                           "document_id": str(document_id), "sha256": "a" * 64,
+                           "storage_key": f"{tenant_b}/{document_id}/{version_id}/{uuid4()}.pdf"})
             with pytest.raises(IntegrityError):
                 with connection.begin_nested():
                     connection.execute(text("""
@@ -51,9 +52,10 @@ def test_document_versions_and_acl_stay_in_tenant():
             connection.execute(text("""
                 INSERT INTO document_versions
                 (id, tenant_id, document_id, version, storage_key, sha256)
-                VALUES (:id, :tenant_id, :document_id, 1, 'synthetic/key', :sha256)
+                VALUES (:id, :tenant_id, :document_id, 1, :storage_key, :sha256)
             """), {"id": str(version_id), "tenant_id": str(tenant_a),
-                   "document_id": str(document_id), "sha256": "a" * 64})
+                   "document_id": str(document_id), "sha256": "a" * 64,
+                   "storage_key": f"{tenant_a}/{document_id}/{version_id}/{uuid4()}.pdf"})
             with pytest.raises(IntegrityError):
                 with connection.begin_nested():
                     connection.execute(text("""

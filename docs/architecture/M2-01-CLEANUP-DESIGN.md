@@ -1,6 +1,6 @@
 # M2-01 第三切片：退役鍵與清理安全設計
 
-**狀態：提案，尚未實作或驗證；不授權正式刪除。** 基準 HEAD `0328da62251f40612d83e5798e8652634c1ae224`，既有唯讀切片審查為 [CONDITIONAL PASS](../development/INDEPENDENT-REVIEW-M2-01.md)。本文件的測試矩陣均為待執行規格。現有 `0010` 並不強制以下不變條件；預覽不是刪除命令。
+**狀態：清理設計提案；正式 Cleaner DELETE 未實作或驗證，也未獲授權。** 本切片新增 Migration `0011_document_key_registry` 及隔離測試；資料庫、PDF／ACL 回歸與獨立審查結果見開發進度。下文有關輪替、attempt、fencing、DELETE 與 crash recovery 的測試矩陣仍為待執行規格。`0010` 單獨不強制 Registry 不變條件；預覽不是刪除命令。
 
 ## 範圍、不變條件與威脅
 
@@ -15,7 +15,11 @@
 
 ## 狀態、約束與原子切換
 
-規劃新增永久 Key Registry（鍵登錄），以 `(namespace, key)` 唯一；記錄不可變 tenant、document、version、generation，狀態單向 `live → retired`，禁止退役列刪除、改 owner 或回復 live。版本以含 owner、generation、固定 `live` 的複合外鍵引用 registry，資料庫唯一約束及權限／觸發器共同執行此規則；所有建立與修改版本的路徑均須受約束，不能只依應用程式自律。具體 DDL、外鍵更新順序與觸發器須另以 migration 和並行測試證實。既有 0010 墓碑與 registry 的唯一來源、複製及一致性須在實作前決定，不允許兩份可各自修改的真相。
+Migration `0011_document_key_registry` 建立永久 Key Registry（鍵登錄），以固定邏輯 namespace `documents` 與完整 storage key 作永久唯一身分，記錄 tenant、document、version、generation、狀態及退役時間。Generation 沿用 canonical key 尾端 UUID，僅作世代識別，不代表時間排序或舊寫入已排空。版本以包含完整 owner、generation 及固定 `live` 的非空複合外鍵引用登錄；資料庫觸發器在版本建立交易中登錄鍵，禁止修改版本儲存身分，並禁止 Registry 身分變更、退役後復活、DELETE、TRUNCATE。退役只可 `live → retired`。`0010` 退役資料回填至單一 Registry，舊表名改為不可自動更新的相容 View。
+
+Migration 固定使用 `public` schema，並在 `READ COMMITTED` 及立即取得相關 ACCESS EXCLUSIVE 鎖的條件下執行。重複鍵、非 canonical key、現用鍵與墓碑衝突、舊墓碑表或欄位有明確 ACL、舊表啟用 RLS、遷移角色並非舊表擁有者等情形均 fail closed，不自動修正既有業務資料；downgrade 一律拒絕。隔離測試與獨立安全審查見 [開發進度](../development/PROGRESS.md)。
+
+目前只完成鍵身分的資料庫基礎，沒有正式鍵輪替、恢復、Cleaner、刪除意圖或 MinIO DELETE 實作。Compose 的 API 與 Migration 仍共用資料庫特權帳號，因此不能宣稱正式服務角色已拆權。正式環境若有舊墓碑表明確 ACL，Migration 會拒絕升級，須先規劃相容處置；同名 View 的 SELECT 權限部署也仍須驗證。
 
 複合外鍵所有欄位均 `NOT NULL`，固定 live 欄位須以 `NOT NULL` 加 CHECK 或生成欄位強制；被參照 tuple 使用無條件唯一約束，禁止以 CASCADE／SET NULL 破壞不變條件。runtime 角色不得繞過 trigger、執行 DDL 或 TRUNCATE。另對 `(namespace, old_key, old_generation)` 設唯一工作約束，避免不同 operation ID 重複處理同一代；直接 SQL 的 NULL、錯 owner／generation、狀態逆轉與撞鍵皆須測試。
 
@@ -72,6 +76,10 @@ Migration 上線前先盤點全域撞鍵、錯誤 owner、非 canonical key、�
 
 現有 `0010` downgrade 先鎖墓碑表，再移除版本表約束；preview 涉及兩表，存在反向鎖序風險，現有裸鎖測試不等於完整 Alembic 驗證。正式 downgrade 必須停止 uploader、recovery、cleaner、preview 與其他相關交易，確認連線排空；保留墓碑／registry／未決工作，非空或存在不可逆退役時拒絕降版。先在隔離環境以完整 Alembic、實際 preview 交錯、中斷及代表性資料量驗證鎖順序、timeout、死鎖回滾與資料保留；不宣稱目前已驗證。
 
+**`0011` 的降版政策更嚴格：一律拒絕，包含 Registry 空表。** 不得將永久鍵目錄降回 `0010`，因舊 Schema 無法表示完整 Generation 身分與所有新墓碑。備份／還原須使用同一一致性時間點的完整 Schema 與資料，包含 Registry、版本、約束、觸發器及部署所需 GRANT；不得將部分表的 data-only dump 附加到已有登錄觸發器的資料庫，否則可能重複登錄或遺失墓碑。PITR 回到舊時間或落後複本接手時，先隔離上傳、發布及任何清理；用可信完整歷程補齊永久鍵身分並完成對帳後才能恢復。若無法重建，維持隔離並封鎖受影響 namespace。這些是營運安全前提，尚未完成正式備份還原演練。
+
+本切片的隔離驗證包含空庫 Migration、已存在的 `0010` Schema 與合成鍵／墓碑、衝突時回滾、鎖競爭與 ACL 相容檢查，以及一條不呼叫 MinIO DELETE 的 PDF 上傳／冪等重試／ACL 撤銷回歸。獨立 Security Reviewer 結論為 CONDITIONAL PASS，未發現本切片 Critical／High；測試通過不代表 Cleaner、fencing、正式備份還原、正式角色拆分或 DELETE 已通過驗收。
+
 ## Test Matrix（待執行）
 
 共同斷言：每次檢查 registry／版本 owner、live 外鍵、永久墓碑、工作唯一及精確租戶物件；所有測試以隔離 PostgreSQL、MinIO、合成資料與非 root 測試帳號執行，使用 barrier 控制交錯並記錄新連線查詢結果。下表 PG／S 分別代表 PostgreSQL／MinIO；操作均是未來測試規格，並非本輪已執行。
@@ -97,4 +105,4 @@ Migration 上線前先盤點全域撞鍵、錯誤 owner、非 canonical key、�
 
 ## 已知限制與放行條件
 
-本設計尚未選定或驗證足以排空在途 PUT 的 fencing；實際儲存服務語意、DDL 約束、完整鎖序、維護操作及上述測試均待驗。現有資料可能違反提案不變條件；現有業務程式尚未採共同鎖或 registry。必須完成獨立安全審查，解決 Critical／High，完成隔離並行、故障、真實斷線與 migration 測試，再依專案流程審查差異；在此之前不得進入正式刪除功能實作或啟用刪除。
+本設計尚未選定或驗證足以排空在途 PUT 的 fencing；正式儲存服務語意、輪替／清理的完整鎖序、維護操作及上述測試均待驗。`0011` 已提供鍵登錄約束，但既有業務程式尚未採用未來清理所需的共同鎖與輪替協定。必須完成清理功能的獨立安全審查，解決 Critical／High，完成隔離並行、故障、真實斷線與正式部署驗證；在此之前不得進入正式刪除功能實作或啟用刪除。
