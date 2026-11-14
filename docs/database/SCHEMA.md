@@ -356,6 +356,7 @@ ERP 端使用 PostgreSQL Transaction（交易）與 Unique Constraint（唯一�
 - 一次性隔離 PostgreSQL 已驗證空庫升級、既有 `0010` 資料回填、衝突時交易回滾、舊墓碑唯讀相容 View、鎖競爭、非預設隔離級別、非 owner 權限、退役限制及拒絕 downgrade。一次性隔離 MinIO／PostgreSQL 已跑 PDF 上傳、同冪等鍵重試與 ACL 撤銷回歸；測試沒有呼叫 MinIO DELETE。測試指令、數量及警告以 `PROGRESS.md` 的當輪紀錄為準。
 - 現有 Compose 的 API 與 Migration 共用資料庫特權帳號；本切片沒有完成正式服務角色拆分，也未驗證正式環境 Preview 角色的 SELECT 權限部署。正式環境須控管新物件的預設權限；資料庫擁有者及具停用觸發器權限者可繞過一般防護。
 - 備份必須在同一一致性時間點包含完整 Schema 與資料、Registry、版本、外鍵、觸發器、必要權限及永久墓碑。不可把只有部分資料表的 data-only 備份直接附加到已啟用觸發器的現有資料庫；舊時間點還原或落後故障切換後，須隔離寫入、發布及刪除，補齊永久鍵紀錄並完成對帳後才能恢復服務。
+- **後續換鍵決策尚未通過：** 現行 `protect_document_version_identity` Trigger 禁止更新 `document_versions.storage_key`，故設計中「同一版本原子換鍵」目前不可執行。需先決定採新增 Version 或受控換鍵，並隔離驗證複合外鍵、Trigger、世代一致性、交易與權限；禁止為了實作直接停用資料庫防護。詳細決策與 CI 驗收條件見[清理安全設計](../architecture/M2-01-CLEANUP-DESIGN.md)。
 - Registry 不提供鍵輪替／恢復服務，也不實作 Cleaner 或物件 DELETE。`waiting_fence` 不是刪除授權；可靠排空舊 PUT、正式租戶資料面隔離與故障復原仍是未解除的放行條件。
 
 ## 9. 待實作營運資料表與 Migration 限制
